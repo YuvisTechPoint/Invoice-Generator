@@ -1,0 +1,14 @@
+# Dependencies
+node_modules
+.next
+out
+.env*.local
+!.env.example
+
+# Runtime invoice data (persisted JSON)
+/data
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
