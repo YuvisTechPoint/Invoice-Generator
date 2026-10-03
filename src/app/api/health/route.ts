@@ -6,12 +6,27 @@ import {
   isStudioAuthDisabled,
 } from "@/lib/config/env";
 import { listStoredInvoices } from "@/lib/data/invoiceStore";
-import { getStorageStatus } from "@/lib/data/jsonStorage";
+import {
+  getStorageStatus,
+  hasPostgresCredentials,
+  verifyPostgresStorage,
+} from "@/lib/data/jsonStorage";
 import { isInvoicePdfEnabled } from "@/features/invoice/server/resolveInvoiceOrder";
 
 export async function GET() {
   let invoiceCount = 0;
   let storageError: string | undefined;
+
+  const storage = getStorageStatus();
+  let postgresConnected: boolean | undefined;
+
+  if (hasPostgresCredentials()) {
+    postgresConnected = await verifyPostgresStorage();
+    if (!postgresConnected && storage.driver === "postgres") {
+      storageError =
+        "Postgres env vars are set but the database connection failed. Redeploy after linking Neon to this Vercel project.";
+    }
+  }
 
   try {
     const invoices = await listStoredInvoices();
@@ -21,11 +36,14 @@ export async function GET() {
       error instanceof Error ? error.message : "Unable to read invoice storage";
   }
 
-  const storage = getStorageStatus();
   const productionHardened = isProductionHardened();
   const issues = getProductionIssues();
   const configured =
-    productionHardened && issues.length === 0 && !storageError && storage.persistent;
+    productionHardened &&
+    issues.length === 0 &&
+    !storageError &&
+    storage.persistent &&
+    (storage.driver !== "postgres" || postgresConnected === true);
 
   return NextResponse.json({
     ok: true,
@@ -39,6 +57,7 @@ export async function GET() {
     authDisabled: isStudioAuthDisabled(),
     storage: storage.driver,
     storagePersistent: storage.persistent,
+    ...(postgresConnected !== undefined ? { postgresConnected } : {}),
     ...(storageError ? { storageError } : {}),
     ...(storage.warning ? { storageWarning: storage.warning } : {}),
     ...(isProductionEnv()

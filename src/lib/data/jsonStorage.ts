@@ -5,8 +5,9 @@ import path from "node:path";
 import { atomicWriteJson, getDataDir, readJsonFile } from "@/lib/data/paths";
 import {
   deletePostgresKey,
-  getPostgresUrl,
+  hasPostgresEnvConfigured,
   listPostgresKeys,
+  probePostgresStorage,
   readPostgresJson,
   writePostgresJson,
 } from "@/lib/data/postgresStorage";
@@ -34,7 +35,12 @@ export function invoiceStorageKey(id: string): string {
 }
 
 export function hasPostgresCredentials(): boolean {
-  return Boolean(getPostgresUrl());
+  return hasPostgresEnvConfigured();
+}
+
+export async function verifyPostgresStorage(): Promise<boolean> {
+  if (!hasPostgresEnvConfigured()) return false;
+  return probePostgresStorage();
 }
 
 export function hasBlobCredentials(): boolean {

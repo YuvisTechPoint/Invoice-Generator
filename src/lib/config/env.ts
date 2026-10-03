@@ -114,11 +114,13 @@ export function getProductionIssues(): string[] {
     const hasBlob =
       Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim()) ||
       Boolean(process.env.BLOB_STORE_ID?.trim());
-    const hasPostgres = Boolean(
-      process.env.POSTGRES_URL?.trim() ||
-        process.env.DATABASE_URL?.trim() ||
-        process.env.POSTGRES_PRISMA_URL?.trim()
-    );
+    const hasPostgres = [
+      process.env.POSTGRES_URL,
+      process.env.DATABASE_URL,
+      process.env.POSTGRES_PRISMA_URL,
+      process.env.POSTGRES_URL_NON_POOLING,
+      process.env.DATABASE_URL_UNPOOLED,
+    ].some((value) => /^postgres(ql)?:\/\//i.test(value?.trim() ?? ""));
     if (!hasBlob && !hasPostgres) {
       issues.push(
         "Connect Vercel Blob or Neon Postgres storage so invoices persist across serverless invocations."
