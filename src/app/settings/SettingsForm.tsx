@@ -1,62 +1,40 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
+import { readJsonResponse } from "@/lib/api/readJsonResponse";
+import type { StudioSettings } from "@/lib/data/settingsStore";
 import { INDIAN_STATES } from "@/lib/demo/invoiceDraft";
 import { routes } from "@/lib/routes";
 
-type SellerDefaults = {
-  storeName: string;
-  legalName: string;
-  tagline: string;
-  address: string;
-  email: string;
-  phone: string;
-  website: string;
-  gstin: string;
-  pan: string;
-  state: string;
-  stateCode: string;
-};
+type SellerDefaults = StudioSettings["sellerDefaults"];
 
 type SettingsResponse = {
-  settings?: {
-    invoicePrefix: string;
-    sellerDefaults: SellerDefaults;
-  };
+  settings?: StudioSettings;
   error?: string;
 };
 
-export default function SettingsForm() {
-  const [invoicePrefix, setInvoicePrefix] = useState("INV");
-  const [seller, setSeller] = useState<SellerDefaults | null>(null);
-  const [status, setStatus] = useState("Loading settings…");
+type SettingsFormProps = {
+  initialSettings: StudioSettings;
+  storagePersistent: boolean;
+};
+
+export default function SettingsForm({
+  initialSettings,
+  storagePersistent,
+}: SettingsFormProps) {
+  const [invoicePrefix, setInvoicePrefix] = useState(initialSettings.invoicePrefix);
+  const [seller, setSeller] = useState<SellerDefaults>(initialSettings.sellerDefaults);
+  const [status, setStatus] = useState("Loaded");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  useEffect(() => {
-    void fetch("/api/settings")
-      .then((res) => res.json())
-      .then((data: SettingsResponse) => {
-        if (!data.settings) {
-          throw new Error(data.error || "Unable to load settings");
-        }
-        setInvoicePrefix(data.settings.invoicePrefix);
-        setSeller(data.settings.sellerDefaults);
-        setStatus("Loaded");
-      })
-      .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : "Unable to load settings");
-      });
-  }, []);
-
   function updateSeller(patch: Partial<SellerDefaults>) {
-    setSeller((prev) => (prev ? { ...prev, ...patch } : prev));
+    setSeller((prev) => ({ ...prev, ...patch }));
   }
 
   function onSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!seller) return;
     setError(null);
     startTransition(async () => {
       try {
@@ -65,21 +43,17 @@ export default function SettingsForm() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ invoicePrefix, sellerDefaults: seller }),
         });
-        const data = (await res.json()) as SettingsResponse;
+        const data = await readJsonResponse<SettingsResponse>(res);
         if (!res.ok) throw new Error(data.error || "Save failed");
-        setStatus("Settings saved");
+        if (data.settings) {
+          setInvoicePrefix(data.settings.invoicePrefix);
+          setSeller(data.settings.sellerDefaults);
+        }
+        setStatus(storagePersistent ? "Settings saved" : "Saved for this session only (connect Blob on Vercel)");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Save failed");
       }
     });
-  }
-
-  if (!seller) {
-    return (
-      <div className="studio-card" style={{ padding: "1.5rem" }}>
-        {error ?? status}
-      </div>
-    );
   }
 
   return (

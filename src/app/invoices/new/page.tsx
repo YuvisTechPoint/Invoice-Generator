@@ -1,23 +1,37 @@
 import { redirect } from "next/navigation";
-import { StorageUnavailableError } from "@/lib/data/jsonStorage";
+import { isNextRedirectError } from "@/lib/navigation/redirect";
+import {
+  StorageUnavailableError,
+  getStorageStatus,
+  requirePersistentStorage,
+} from "@/lib/data/jsonStorage";
 import { createNewInvoice } from "@/lib/server/invoiceWorkflow";
 import { routes } from "@/lib/routes";
 
 export const dynamic = "force-dynamic";
 
+function storageRedirect(message: string): never {
+  redirect(
+    `${routes.invoices}?error=storage&message=${encodeURIComponent(message)}`
+  );
+}
+
 /** Creates a fresh invoice and opens it in the editor. */
 export default async function NewInvoicePage() {
-  let invoice;
+  const storage = getStorageStatus();
+  if (!storage.persistent) {
+    storageRedirect(storage.warning ?? "Connect Vercel Blob storage and redeploy.");
+  }
+
   try {
-    invoice = await createNewInvoice();
+    requirePersistentStorage();
+    const invoice = await createNewInvoice();
+    redirect(routes.editor(invoice.id));
   } catch (error) {
+    if (isNextRedirectError(error)) throw error;
     if (error instanceof StorageUnavailableError) {
-      redirect(
-        `${routes.invoices}?error=storage&message=${encodeURIComponent(error.message)}`
-      );
+      storageRedirect(error.message);
     }
     throw error;
   }
-
-  redirect(routes.editor(invoice.id));
 }

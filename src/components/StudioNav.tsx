@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { readJsonResponse } from "@/lib/api/readJsonResponse";
 import { BRAND } from "@/lib/brand";
 import { navKeyFromPath, routes, type NavKey } from "@/lib/routes";
 
@@ -29,8 +30,8 @@ export default function StudioNav({ active }: StudioNavProps) {
   useEffect(() => {
     let cancelled = false;
     void fetch("/api/invoices")
-      .then((res) => res.json())
-      .then((data: { activeInvoiceId?: string | null; invoices?: { id: string }[] }) => {
+      .then((res) => readJsonResponse<{ activeInvoiceId?: string | null; invoices?: { id: string }[] }>(res))
+      .then((data) => {
         if (cancelled) return;
         const id = data.activeInvoiceId || data.invoices?.[0]?.id;
         setEditorHref(id ? routes.editor(id) : routes.newInvoice);
@@ -46,8 +47,8 @@ export default function StudioNav({ active }: StudioNavProps) {
   useEffect(() => {
     let cancelled = false;
     void fetch("/api/auth/me")
-      .then((res) => res.json())
-      .then((data: { authRequired?: boolean; authenticated?: boolean }) => {
+      .then((res) => readJsonResponse<{ authRequired?: boolean; authenticated?: boolean }>(res))
+      .then((data) => {
         if (cancelled) return;
         setAuthRequired(Boolean(data.authRequired));
         setAuthenticated(Boolean(data.authenticated));

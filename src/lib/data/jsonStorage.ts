@@ -7,6 +7,12 @@ import { atomicWriteJson, getDataDir, readJsonFile } from "@/lib/data/paths";
 export const SETTINGS_STORAGE_KEY = "settings.json";
 export const INVOICE_STORAGE_PREFIX = "invoices/";
 
+export type StorageStatus = {
+  driver: "blob" | "filesystem" | "ephemeral";
+  persistent: boolean;
+  warning?: string;
+};
+
 export class StorageUnavailableError extends Error {
   constructor(message: string) {
     super(message);
@@ -19,16 +25,47 @@ export function invoiceStorageKey(id: string): string {
   return `${INVOICE_STORAGE_PREFIX}${safe}.json`;
 }
 
+/** True when Vercel Blob credentials are available (token or integrated store). */
+export function hasBlobCredentials(): boolean {
+  if (process.env.BLOB_READ_WRITE_TOKEN?.trim()) return true;
+  // Vercel-connected Blob store uses OIDC + store id at runtime.
+  if (process.env.BLOB_STORE_ID?.trim() && process.env.VERCEL?.trim()) {
+    return true;
+  }
+  return false;
+}
+
 export function useBlobStorage(): boolean {
   if (process.env.STORAGE_DRIVER === "filesystem") return false;
-  if (process.env.STORAGE_DRIVER === "blob") {
-    return Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim());
-  }
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim());
+  if (process.env.STORAGE_DRIVER === "blob") return hasBlobCredentials();
+  return hasBlobCredentials();
 }
 
 export function isEphemeralFilesystem(): boolean {
   return Boolean(process.env.VERCEL?.trim()) && !useBlobStorage();
+}
+
+export function getStorageStatus(): StorageStatus {
+  if (useBlobStorage()) {
+    return { driver: "blob", persistent: true };
+  }
+  if (isEphemeralFilesystem()) {
+    return {
+      driver: "ephemeral",
+      persistent: false,
+      warning:
+        "Vercel Blob is not connected. Invoices will not persist until you connect Blob storage and redeploy.",
+    };
+  }
+  return { driver: "filesystem", persistent: true };
+}
+
+export function requirePersistentStorage(): void {
+  if (isEphemeralFilesystem()) {
+    throw new StorageUnavailableError(
+      "Persistent storage is required on Vercel. Open your Vercel project → Storage → Create Blob → connect to this app → Redeploy."
+    );
+  }
 }
 
 function filesystemPath(key: string): string {
@@ -39,7 +76,7 @@ function filesystemPath(key: string): string {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-  } catch (error) {
+  } catch {
     throw new StorageUnavailableError(
       `Cannot write to local storage (${dir}). On Vercel, connect Blob storage in your project settings.`
     );
@@ -55,6 +92,7 @@ async function readBlobJson<T>(key: string, fallback: T): Promise<T> {
       return fallback;
     }
     const raw = await new Response(result.stream).text();
+    if (!raw.trim()) return fallback;
     return JSON.parse(raw) as T;
   } catch (error) {
     console.warn(
@@ -95,6 +133,12 @@ export async function writeStorageJson(key: string, value: unknown): Promise<voi
         `Unable to save data to Vercel Blob (${message}). Connect Blob storage to this Vercel project and redeploy.`
       );
     }
+  }
+
+  if (isEphemeralFilesystem()) {
+    throw new StorageUnavailableError(
+      "Persistent storage is required on Vercel. Connect Vercel Blob storage and redeploy."
+    );
   }
 
   try {

@@ -110,9 +110,13 @@ export function getProductionIssues(): string[] {
     issues.push("Set NEXT_PUBLIC_SITE_URL to your public HTTPS origin.");
   }
 
-  if (isVercelDeployment() && !process.env.BLOB_READ_WRITE_TOKEN?.trim()) {
+  if (
+    isVercelDeployment() &&
+    !process.env.BLOB_READ_WRITE_TOKEN?.trim() &&
+    !process.env.BLOB_STORE_ID?.trim()
+  ) {
     issues.push(
-      "Connect Vercel Blob storage (BLOB_READ_WRITE_TOKEN) so invoices persist across serverless invocations."
+      "Connect Vercel Blob storage so invoices persist across serverless invocations."
     );
   }
 

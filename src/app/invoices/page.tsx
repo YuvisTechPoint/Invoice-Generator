@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import StudioNav from "@/components/StudioNav";
 import StudioFooter from "@/components/StudioFooter";
+import StorageBanner from "@/components/StorageBanner";
+import { getStorageStatus } from "@/lib/data/jsonStorage";
 import {
   listStoredInvoices,
   type InvoiceListItem,
@@ -52,9 +54,14 @@ export default async function InvoicesPage({ searchParams }: InvoicesPageProps) 
     }
   }
 
+  const storage = getStorageStatus();
+
   return (
     <div className="studio-shell">
       <StudioNav active="library" />
+      <div className="studio-container" style={{ paddingTop: "1rem" }}>
+        <StorageBanner status={storage} />
+      </div>
       <InvoicesClient
         initialInvoices={invoices}
         initialActiveId={activeInvoiceId}

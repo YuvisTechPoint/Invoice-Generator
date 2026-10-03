@@ -256,6 +256,12 @@ img {
   font-size: 0.95rem;
 }
 
+.studio-alert--warn {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+}
+
 .studio-alert--error {
   background: #fef2f2;
   color: var(--studio-danger);
@@ -729,6 +735,12 @@ img {
   margin-bottom: 1rem;
   padding: 0.75rem 1rem;
   border-radius: var(--studio-radius-sm);
+}
+
+.studio-alert--warn {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
 }
 
 .studio-alert--error {
