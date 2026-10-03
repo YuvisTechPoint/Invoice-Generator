@@ -62,6 +62,7 @@ export default function InvoicesClient({
     if (!url.searchParams.has("error")) return;
     url.searchParams.delete("error");
     url.searchParams.delete("id");
+    url.searchParams.delete("message");
     window.history.replaceState({}, "", url.pathname);
   }, [initialError]);
 

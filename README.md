@@ -59,10 +59,11 @@ This is the recommended path for a public `*.vercel.app` deployment.
 
 ### 2. Connect Blob storage (required)
 
-Invoices must persist outside the serverless filesystem.
+**Without Blob, invoice pages will fail on Vercel** — the serverless filesystem is read-only.
 
 1. In your Vercel project: **Storage → Create → Blob**.
 2. Connect the store to this project — Vercel sets `BLOB_READ_WRITE_TOKEN` automatically.
+3. **Redeploy** after connecting Blob so the token is available at runtime.
 
 ### 3. Environment variables
 

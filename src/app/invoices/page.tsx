@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 type InvoicesPageProps = {
-  searchParams: Promise<{ error?: string; id?: string }>;
+  searchParams: Promise<{ error?: string; id?: string; message?: string }>;
 };
 
 export default async function InvoicesPage({ searchParams }: InvoicesPageProps) {
@@ -27,19 +27,37 @@ export default async function InvoicesPage({ searchParams }: InvoicesPageProps) 
     initialError = params.id
       ? `Invoice "${params.id}" was not found. It may have been deleted.`
       : "That invoice was not found.";
+  } else if (params.error === "storage") {
+    initialError =
+      params.message?.trim() ||
+      "Storage is not configured. Connect Vercel Blob storage in your project settings, then redeploy.";
   }
 
-  const [invoices, settings] = await Promise.all([
-    listStoredInvoices(),
-    getStudioSettings(),
-  ]);
+  let invoices: InvoiceListItem[] = [];
+  let activeInvoiceId: string | null = null;
+
+  try {
+    const [listed, settings] = await Promise.all([
+      listStoredInvoices(),
+      getStudioSettings(),
+    ]);
+    invoices = listed;
+    activeInvoiceId = settings.activeInvoiceId;
+  } catch (error) {
+    if (!initialError) {
+      initialError =
+        error instanceof Error
+          ? error.message
+          : "Unable to load invoices. Check storage configuration.";
+    }
+  }
 
   return (
     <div className="studio-shell">
       <StudioNav active="library" />
       <InvoicesClient
         initialInvoices={invoices}
-        initialActiveId={settings.activeInvoiceId}
+        initialActiveId={activeInvoiceId}
         initialError={initialError}
       />
       <StudioFooter />
