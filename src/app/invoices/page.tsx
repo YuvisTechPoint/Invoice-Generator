@@ -23,16 +23,17 @@ type InvoicesPageProps = {
 
 export default async function InvoicesPage({ searchParams }: InvoicesPageProps) {
   const params = await searchParams;
+  const storage = getStorageStatus();
   let initialError: string | null = null;
 
   if (params.error === "not-found") {
     initialError = params.id
       ? `Invoice "${params.id}" was not found. It may have been deleted.`
       : "That invoice was not found.";
-  } else if (params.error === "storage") {
+  } else if (params.error === "storage" && !storage.warning) {
     initialError =
       params.message?.trim() ||
-      "Storage is not configured. Connect Vercel Blob storage in your project settings, then redeploy.";
+      "Storage is not configured. Connect Vercel storage and redeploy.";
   }
 
   let invoices: InvoiceListItem[] = [];
@@ -46,15 +47,13 @@ export default async function InvoicesPage({ searchParams }: InvoicesPageProps) 
     invoices = listed;
     activeInvoiceId = settings.activeInvoiceId;
   } catch (error) {
-    if (!initialError) {
+    if (!initialError && !storage.warning) {
       initialError =
         error instanceof Error
           ? error.message
           : "Unable to load invoices. Check storage configuration.";
     }
   }
-
-  const storage = getStorageStatus();
 
   return (
     <div className="studio-shell">
@@ -66,6 +65,7 @@ export default async function InvoicesPage({ searchParams }: InvoicesPageProps) 
         initialInvoices={invoices}
         initialActiveId={activeInvoiceId}
         initialError={initialError}
+        storageReady={storage.persistent}
       />
       <StudioFooter />
     </div>

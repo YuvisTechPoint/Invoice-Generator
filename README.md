@@ -57,13 +57,18 @@ This is the recommended path for a public `*.vercel.app` deployment.
 2. Go to [vercel.com/new](https://vercel.com/new) and import **Invoice-Generator**.
 3. Leave the default **Next.js** framework preset.
 
-### 2. Connect Blob storage (required)
+### 2. Connect persistent storage (required)
 
-**Without Blob, invoice pages will fail on Vercel** — the serverless filesystem is read-only.
+**Without storage, invoices cannot persist on Vercel** — the serverless filesystem is read-only.
 
-1. In your Vercel project: **Storage → Create → Blob**.
-2. Connect the store to this project — Vercel sets `BLOB_READ_WRITE_TOKEN` automatically.
-3. **Redeploy** after connecting Blob so the token is available at runtime.
+Pick **one** option in your Vercel project (**Storage** tab):
+
+| Option | Steps |
+|--------|--------|
+| **Blob** (recommended) | Create **Blob** → connect to this project → redeploy |
+| **Neon Postgres** | Create **Neon** → connect to this project → redeploy |
+
+Vercel injects `BLOB_READ_WRITE_TOKEN` or `POSTGRES_URL` automatically.
 
 ### 3. Environment variables
 

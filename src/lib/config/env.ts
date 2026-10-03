@@ -110,14 +110,20 @@ export function getProductionIssues(): string[] {
     issues.push("Set NEXT_PUBLIC_SITE_URL to your public HTTPS origin.");
   }
 
-  if (
-    isVercelDeployment() &&
-    !process.env.BLOB_READ_WRITE_TOKEN?.trim() &&
-    !process.env.BLOB_STORE_ID?.trim()
-  ) {
-    issues.push(
-      "Connect Vercel Blob storage so invoices persist across serverless invocations."
+  if (isVercelDeployment()) {
+    const hasBlob =
+      Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim()) ||
+      Boolean(process.env.BLOB_STORE_ID?.trim());
+    const hasPostgres = Boolean(
+      process.env.POSTGRES_URL?.trim() ||
+        process.env.DATABASE_URL?.trim() ||
+        process.env.POSTGRES_PRISMA_URL?.trim()
     );
+    if (!hasBlob && !hasPostgres) {
+      issues.push(
+        "Connect Vercel Blob or Neon Postgres storage so invoices persist across serverless invocations."
+      );
+    }
   }
 
   if (isStudioAuthRequired()) {

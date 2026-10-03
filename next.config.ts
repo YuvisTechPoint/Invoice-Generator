@@ -19,6 +19,7 @@ const nextConfig: NextConfig = {
     "puppeteer",
     "puppeteer-core",
     "@sparticuz/chromium",
+    "@neondatabase/serverless",
     "playwright",
   ],
   async headers() {

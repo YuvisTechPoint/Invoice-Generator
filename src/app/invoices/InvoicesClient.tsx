@@ -21,6 +21,7 @@ type InvoicesClientProps = {
   initialInvoices: InvoiceListItem[];
   initialActiveId: string | null;
   initialError?: string | null;
+  storageReady?: boolean;
 };
 
 function formatInr(amount: number): string {
@@ -42,6 +43,7 @@ export default function InvoicesClient({
   initialInvoices,
   initialActiveId,
   initialError = null,
+  storageReady = true,
 }: InvoicesClientProps) {
   const router = useRouter();
   const [items, setItems] = useState(initialInvoices);
@@ -254,7 +256,14 @@ export default function InvoicesClient({
               <Link href={editorHref} className="studio-btn studio-btn--sm">
                 Continue in editor
               </Link>
-              <Link href={routes.newInvoice} className="studio-btn studio-btn--primary studio-btn--sm">
+              <Link
+                href={storageReady ? routes.newInvoice : routes.invoices}
+                className="studio-btn studio-btn--primary studio-btn--sm"
+                aria-disabled={!storageReady}
+                onClick={(event) => {
+                  if (!storageReady) event.preventDefault();
+                }}
+              >
                 New invoice
               </Link>
             </div>
@@ -288,7 +297,7 @@ export default function InvoicesClient({
                     ? "Create your first invoice to open the editor."
                     : "Try a different search term."}
                 </p>
-                {items.length === 0 ? (
+                {items.length === 0 && storageReady ? (
                   <Link href={routes.newInvoice} className="studio-btn studio-btn--primary invoices-empty__cta">
                     Create first invoice
                   </Link>

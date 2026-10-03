@@ -10,10 +10,27 @@ export default function StorageBanner({ status }: StorageBannerProps) {
   return (
     <div className="studio-alert studio-alert--warn" role="status">
       <strong>Storage setup required.</strong> {status.warning}
-      <span style={{ display: "block", marginTop: "0.35rem", fontSize: "0.9rem" }}>
-        Vercel dashboard → <em>Storage</em> → <em>Create Blob</em> → connect to this
-        project → <em>Redeploy</em>.
-      </span>
+      <ol
+        style={{
+          margin: "0.65rem 0 0",
+          paddingLeft: "1.25rem",
+          fontSize: "0.9rem",
+          lineHeight: 1.5,
+        }}
+      >
+        <li>Open your Vercel project → <strong>Storage</strong></li>
+        <li>
+          Create <strong>Blob</strong> <em>or</em> <strong>Neon Postgres</strong> and connect
+          it to this app
+        </li>
+        <li>
+          <strong>Redeploy</strong> the latest commit from GitHub
+        </li>
+        <li>
+          Verify <code>/api/health</code> shows{" "}
+          <code>storagePersistent: true</code>
+        </li>
+      </ol>
     </div>
   );
 }
