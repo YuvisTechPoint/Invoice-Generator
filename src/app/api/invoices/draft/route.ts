@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { guardStudioApi } from "@/lib/api/guards";
 import { buildInvoiceUrls } from "@/features/invoice/server/invoiceUrls";
 import { generateInvoiceHtml } from "@/features/invoice/server/generateInvoiceHtml";
+import { appendQueryParam, routes } from "@/lib/routes";
 import {
   draftToOrder,
   draftToSellerMeta,
@@ -11,11 +13,16 @@ import { clearInvoiceSellerMetaCache } from "@/features/invoice/server/sellerMet
 import { upsertOrder } from "@/lib/server/orderService";
 import { parseInvoiceDraft } from "@/lib/validation/invoiceDraftSchema";
 
-export async function GET() {
-  return NextResponse.json({ draft: getInvoiceDraft() });
+export async function GET(request: Request) {
+  const blocked = await guardStudioApi(request, { rateLimit: "studioApi" });
+  if (blocked) return blocked;
+  return NextResponse.json({ draft: await getInvoiceDraft() });
 }
 
 export async function PUT(request: Request) {
+  const blocked = await guardStudioApi(request, { rateLimit: "studioApi" });
+  if (blocked) return blocked;
+
   try {
     const body = (await request.json()) as { draft?: unknown; persist?: boolean };
     const parsed = parseInvoiceDraft(body.draft);
@@ -25,23 +32,32 @@ export async function PUT(request: Request) {
 
     const normalized = normalizeInvoiceDraft(parsed.draft);
     const draft =
-      body.persist === false ? normalized : saveInvoiceDraft(normalized);
+      body.persist === false
+        ? normalized
+        : await saveInvoiceDraft(normalized);
     const order = draftToOrder(draft);
     const seller = draftToSellerMeta(draft);
 
     if (body.persist !== false) {
-      upsertOrder(order, draft);
+      await upsertOrder(order, draft);
       clearInvoiceSellerMetaCache();
     }
 
     const invoiceUrls = buildInvoiceUrls(order);
     const pdfPath = `/api/invoices/draft/pdf`;
+    const editorReturn = routes.editor(order.id);
+    const baseHtml =
+      invoiceUrls?.html ??
+      `/api/invoices/${encodeURIComponent(order.id)}/html`;
+    const htmlPath = appendQueryParam(baseHtml, "returnTo", editorReturn);
+    const basePrint = invoiceUrls?.print ?? `${baseHtml}${baseHtml.includes("?") ? "&" : "?"}print=1`;
+    const printPath = appendQueryParam(basePrint, "returnTo", editorReturn);
 
     const html = generateInvoiceHtml(order, seller, {
       showActions: true,
       downloadUrl: pdfPath,
       content: draft.content,
-      returnTo: "/editor",
+      returnTo: editorReturn,
     });
 
     return NextResponse.json({
@@ -56,15 +72,11 @@ export async function PUT(request: Request) {
       },
       html,
       urls: {
-        html:
-          invoiceUrls?.html ??
-          `/api/invoices/${encodeURIComponent(order.id)}/html`,
-        print:
-          invoiceUrls?.print ??
-          `/api/invoices/${encodeURIComponent(order.id)}/html?print=1`,
+        html: htmlPath,
+        print: printPath,
         page:
           invoiceUrls?.page ??
-          `/orders/${encodeURIComponent(order.id)}/invoice`,
+          routes.invoicePage(order.id, editorReturn),
         pdf: pdfPath,
       },
     });

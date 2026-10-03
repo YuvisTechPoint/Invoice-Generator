@@ -1,11 +1,11 @@
 import "server-only";
-import {
-  atomicWriteJson,
-  getSettingsPath,
-  readJsonFile,
-} from "@/lib/data/paths";
 import { BRAND } from "@/lib/brand";
 import { SELLER_STATE } from "@/lib/invoiceTotals";
+import {
+  SETTINGS_STORAGE_KEY,
+  readStorageJson,
+  writeStorageJson,
+} from "@/lib/data/jsonStorage";
 
 export type StudioSettings = {
   invoicePrefix: string;
@@ -34,7 +34,7 @@ const DEFAULT_SETTINGS: StudioSettings = {
     storeName: BRAND.name,
     legalName: `M/S ${BRAND.name.toUpperCase()}`,
     tagline: BRAND.tagline,
-    address: "Andheri East\nMumbai, Maharashtra, 400069",
+    address: "Your city, state, India",
     email: BRAND.email,
     phone: BRAND.phoneDisplay,
     website: `https://${BRAND.domain}/`,
@@ -45,9 +45,9 @@ const DEFAULT_SETTINGS: StudioSettings = {
   },
 };
 
-export function getStudioSettings(): StudioSettings {
-  const stored = readJsonFile<Partial<StudioSettings>>(
-    getSettingsPath(),
+export async function getStudioSettings(): Promise<StudioSettings> {
+  const stored = await readStorageJson<Partial<StudioSettings>>(
+    SETTINGS_STORAGE_KEY,
     {}
   );
   return {
@@ -61,8 +61,10 @@ export function getStudioSettings(): StudioSettings {
   };
 }
 
-export function saveStudioSettings(patch: Partial<StudioSettings>): StudioSettings {
-  const current = getStudioSettings();
+export async function saveStudioSettings(
+  patch: Partial<StudioSettings>
+): Promise<StudioSettings> {
+  const current = await getStudioSettings();
   const next: StudioSettings = {
     ...current,
     ...patch,
@@ -72,20 +74,31 @@ export function saveStudioSettings(patch: Partial<StudioSettings>): StudioSettin
       ...(patch.sellerDefaults ?? {}),
     },
   };
-  atomicWriteJson(getSettingsPath(), next);
+  await writeStorageJson(SETTINGS_STORAGE_KEY, next);
   return next;
 }
 
 /** Allocate next sequential invoice number: INV-2026-0001 */
-export function allocateInvoiceNumber(date = new Date()): string {
-  const settings = getStudioSettings();
+export async function allocateInvoiceNumber(date = new Date()): Promise<string> {
   const year = String(date.getFullYear());
-  const nextSeq = (settings.counters[year] ?? 0) + 1;
-  saveStudioSettings({
-    counters: { ...settings.counters, [year]: nextSeq },
-  });
-  const prefix = settings.invoicePrefix || "INV";
-  return `${prefix}-${year}-${String(nextSeq).padStart(4, "0")}`;
+
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const settings = await getStudioSettings();
+    const prefix = settings.invoicePrefix || "INV";
+    const nextSeq = (settings.counters[year] ?? 0) + 1;
+    await saveStudioSettings({
+      counters: { ...settings.counters, [year]: nextSeq },
+    });
+
+    const verify = await getStudioSettings();
+    if (verify.counters[year] === nextSeq) {
+      return `${prefix}-${year}-${String(nextSeq).padStart(4, "0")}`;
+    }
+  }
+
+  throw new Error(
+    "Unable to allocate invoice number. Retry or check storage permissions."
+  );
 }
 
 export function allocateProjectRef(date = new Date()): string {
@@ -96,6 +109,6 @@ export function allocateProjectRef(date = new Date()): string {
   return `PRJ-${year}${month}${day}-${suffix}`;
 }
 
-export function setActiveInvoiceId(id: string | null): void {
-  saveStudioSettings({ activeInvoiceId: id });
+export async function setActiveInvoiceId(id: string | null): Promise<void> {
+  await saveStudioSettings({ activeInvoiceId: id });
 }

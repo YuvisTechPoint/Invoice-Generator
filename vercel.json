@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "build": {
+    "env": {
+      "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD": "true"
+    }
+  },
+  "functions": {
+    "src/app/api/invoices/**/pdf/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/invoices/draft/pdf/route.ts": {
+      "maxDuration": 60
+    }
+  }
+}

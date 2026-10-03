@@ -1,15 +1,40 @@
 {
-  "name": "invoice-generation-system",
+  "name": "invoice-generator",
   "version": "1.0.0",
-  "private": true,
+  "description": "Open-source invoice studio — create, edit, export PDFs, and share client links.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YuvisTechPoint/Invoice-Generator.git"
+  },
+  "homepage": "https://github.com/YuvisTechPoint/Invoice-Generator#readme",
+  "bugs": {
+    "url": "https://github.com/YuvisTechPoint/Invoice-Generator/issues"
+  },
+  "keywords": [
+    "invoice",
+    "invoice-generator",
+    "nextjs",
+    "pdf",
+    "open-source",
+    "vercel"
+  ],
   "scripts": {
     "dev": "next dev",
+    "dev:clean": "node -e \"try{require('fs').rmSync('.next',{recursive:true,force:true})}catch(e){}\" && next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "clean": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\"",
+    "docker:build": "docker build -t invoice-generator .",
+    "docker:up": "docker compose up -d --build",
+    "docker:down": "docker compose down"
   },
   "dependencies": {
+    "@sparticuz/chromium": "^153.0.0",
+    "@vercel/blob": "^2.8.0",
     "next": "^15.3.4",
-    "puppeteer": "^25.3.0",
+    "puppeteer-core": "^25.12.0",
     "qrcode": "^1.5.4",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
@@ -17,6 +42,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "puppeteer": "^25.3.0",
     "@types/node": "^22.15.30",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.1.6",

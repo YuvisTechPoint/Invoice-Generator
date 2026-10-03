@@ -1,6 +1,5 @@
 import "server-only";
 
-import { isInvoiceAvailable } from "@/features/invoice/utils/invoice-utils";
 import type { InvoiceUrls } from "@/features/invoice/types";
 import { createInvoiceAccessToken } from "@/lib/security/invoiceAccessToken";
 import type { Order } from "@/types/order";
@@ -15,7 +14,9 @@ function appendToken(path: string, orderId: string, email: string): string {
 }
 
 export function buildInvoiceUrls(order: Order): InvoiceUrls | null {
-  if (!isInvoiceAvailable(order)) return null;
+  if (!order.id?.trim() || !order.invoice?.invoiceNumber?.trim()) {
+    return null;
+  }
 
   const baseHtml = `/api/invoices/${encodeURIComponent(order.id)}/html`;
   const basePdf = `/api/invoices/${encodeURIComponent(order.id)}/pdf`;

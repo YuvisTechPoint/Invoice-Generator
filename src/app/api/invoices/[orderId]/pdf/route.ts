@@ -12,6 +12,9 @@ import {
 } from "@/features/invoice/server/resolveInvoiceOrder";
 import { getStoredInvoice } from "@/lib/data/invoiceStore";
 
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
 function buildHtmlFallbackUrl(
   requestUrl: string,
   reason: "disabled" | "unavailable"
@@ -52,7 +55,7 @@ export async function GET(
       );
     }
 
-    const stored = getStoredInvoice(orderId);
+    const stored = await getStoredInvoice(orderId);
     const seller = await getInvoiceSellerMetaForOrder(orderId);
     const html = generateInvoiceHtml(resolved.order, seller, {
       showActions: false,

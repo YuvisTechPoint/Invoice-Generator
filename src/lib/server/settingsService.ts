@@ -11,7 +11,7 @@ export type StoreSettings = {
 };
 
 export async function getStoreSettings(): Promise<StoreSettings> {
-  const settings = getStudioSettings();
+  const settings = await getStudioSettings();
   const seller = settings.sellerDefaults;
   return {
     storeName: seller.storeName,

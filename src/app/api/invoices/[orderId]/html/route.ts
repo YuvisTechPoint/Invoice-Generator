@@ -47,7 +47,7 @@ export async function GET(
       );
     }
 
-    const stored = getStoredInvoice(orderId);
+    const stored = await getStoredInvoice(orderId);
     const seller = await getInvoiceSellerMetaForOrder(orderId);
     const content = stored?.draft.content;
     const pdfUrl = `/api/invoices/${encodeURIComponent(orderId)}/pdf${
@@ -58,7 +58,7 @@ export async function GET(
       autoPrint,
       showActions: true,
       downloadUrl: pdfUrl,
-      returnTo: returnTo || "/invoices",
+      returnTo: returnTo || `/editor?id=${encodeURIComponent(orderId)}`,
       pdfFallbackNotice,
       content,
     });

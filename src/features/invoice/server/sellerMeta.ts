@@ -15,7 +15,7 @@ export async function getInvoiceSellerMeta(): Promise<InvoiceSellerMeta> {
     return cachedSellerMeta.value;
   }
 
-  const draft = getInvoiceDraft();
+  const draft = await getInvoiceDraft();
   const meta = draftToSellerMeta(draft);
 
   cachedSellerMeta = {
@@ -29,7 +29,7 @@ export async function getInvoiceSellerMeta(): Promise<InvoiceSellerMeta> {
 export async function getInvoiceSellerMetaForOrder(
   orderId: string
 ): Promise<InvoiceSellerMeta> {
-  const stored = getStoredInvoice(orderId);
+  const stored = await getStoredInvoice(orderId);
   if (stored?.draft) {
     return draftToSellerMeta(stored.draft);
   }

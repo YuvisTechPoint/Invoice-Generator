@@ -1,10 +1,12 @@
-import { Suspense } from "react";
+import { isStudioAuthRequired } from "@/lib/config/env";
+import { redirect } from "next/navigation";
+import { routes } from "@/lib/routes";
 import LoginForm from "./LoginForm";
 
 export default function LoginPage() {
-  return (
-    <Suspense fallback={<main style={{ padding: "2rem" }}>Loading…</main>}>
-      <LoginForm />
-    </Suspense>
-  );
+  if (!isStudioAuthRequired()) {
+    redirect(routes.invoices);
+  }
+
+  return <LoginForm />;
 }

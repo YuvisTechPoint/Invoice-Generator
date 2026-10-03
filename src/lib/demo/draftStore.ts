@@ -17,8 +17,8 @@ import {
   setActiveInvoiceId,
 } from "@/lib/data/settingsStore";
 
-function withStudioDefaults(draft: InvoiceDraft): InvoiceDraft {
-  const settings = getStudioSettings();
+async function withStudioDefaults(draft: InvoiceDraft): Promise<InvoiceDraft> {
+  const settings = await getStudioSettings();
   return normalizeInvoiceDraft({
     ...draft,
     seller: {
@@ -29,58 +29,63 @@ function withStudioDefaults(draft: InvoiceDraft): InvoiceDraft {
 }
 
 /** Active invoice draft for the editor (persisted). */
-export function getInvoiceDraft(): InvoiceDraft {
-  const settings = getStudioSettings();
+export async function getInvoiceDraft(): Promise<InvoiceDraft> {
+  const settings = await getStudioSettings();
   if (settings.activeInvoiceId) {
-    const stored = getStoredInvoice(settings.activeInvoiceId);
+    const stored = await getStoredInvoice(settings.activeInvoiceId);
     if (stored?.draft) {
       return normalizeInvoiceDraft(stored.draft);
     }
   }
 
-  const latest = listStoredInvoices()[0];
+  const latest = (await listStoredInvoices())[0];
   if (latest) {
-    const stored = getStoredInvoice(latest.id);
+    const stored = await getStoredInvoice(latest.id);
     if (stored?.draft) {
-      setActiveInvoiceId(stored.id);
+      await setActiveInvoiceId(stored.id);
       return normalizeInvoiceDraft(stored.draft);
     }
   }
 
-  const draft = withStudioDefaults({
+  const studio = await getStudioSettings();
+  const draft = await withStudioDefaults({
     ...getDefaultInvoiceDraft(),
     orderId: allocateProjectRef(),
-    invoiceNumber: allocateInvoiceNumber(),
-    seller: { ...getStudioSettings().sellerDefaults },
+    invoiceNumber: await allocateInvoiceNumber(),
+    seller: { ...studio.sellerDefaults },
   });
-  const saved = saveStoredInvoice(draft, { status: "draft" });
-  setActiveInvoiceId(saved.id);
+  const saved = await saveStoredInvoice(draft, { status: "draft" });
+  await setActiveInvoiceId(saved.id);
   return normalizeInvoiceDraft(saved.draft);
 }
 
-export function saveInvoiceDraft(draft: InvoiceDraft): InvoiceDraft {
-  const normalized = withStudioDefaults(normalizeInvoiceDraft(draft));
-  const saved = saveStoredInvoice(normalized, { status: "draft" });
-  setActiveInvoiceId(saved.id);
+export async function saveInvoiceDraft(draft: InvoiceDraft): Promise<InvoiceDraft> {
+  const normalized = await withStudioDefaults(normalizeInvoiceDraft(draft));
+  const existing = await getStoredInvoice(normalized.orderId);
+  const saved = await saveStoredInvoice(
+    normalized,
+    existing ? {} : { status: "draft" }
+  );
+  await setActiveInvoiceId(saved.id);
   return normalizeInvoiceDraft(saved.draft);
 }
 
-export function resetInvoiceDraft(): InvoiceDraft {
-  const settings = getStudioSettings();
-  const draft = withStudioDefaults({
+export async function resetInvoiceDraft(): Promise<InvoiceDraft> {
+  const settings = await getStudioSettings();
+  const draft = await withStudioDefaults({
     ...getDefaultInvoiceDraft(),
     orderId: allocateProjectRef(),
-    invoiceNumber: allocateInvoiceNumber(),
+    invoiceNumber: await allocateInvoiceNumber(),
     seller: { ...settings.sellerDefaults },
   });
-  const saved = saveStoredInvoice(draft, { status: "draft" });
-  setActiveInvoiceId(saved.id);
+  const saved = await saveStoredInvoice(draft, { status: "draft" });
+  await setActiveInvoiceId(saved.id);
   return normalizeInvoiceDraft(saved.draft);
 }
 
-export function loadInvoiceDraft(id: string): InvoiceDraft | null {
-  const stored = getStoredInvoice(id);
+export async function loadInvoiceDraft(id: string): Promise<InvoiceDraft | null> {
+  const stored = await getStoredInvoice(id);
   if (!stored?.draft) return null;
-  setActiveInvoiceId(stored.id);
+  await setActiveInvoiceId(stored.id);
   return normalizeInvoiceDraft(stored.draft);
 }

@@ -1,7 +1,9 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { BRAND } from "@/lib/brand";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -35,95 +37,47 @@ export default function LoginForm() {
   }
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
-        background: "linear-gradient(160deg, #0f172a, #1e293b 55%, #334155)",
-        color: "#f8fafc",
-        fontFamily: "Georgia, 'Times New Roman', serif",
-        padding: "1.5rem",
-      }}
-    >
-      <form
-        onSubmit={onSubmit}
-        style={{
-          width: "min(420px, 100%)",
-          background: "rgba(15, 23, 42, 0.72)",
-          border: "1px solid rgba(248,250,252,0.15)",
-          padding: "2rem",
-          display: "grid",
-          gap: "1rem",
-        }}
-      >
-        <div>
-          <p
-            style={{
-              margin: 0,
-              letterSpacing: "0.14em",
-              fontSize: "0.75rem",
-              opacity: 0.7,
-            }}
+    <main className="login-page">
+      <div className="login-card">
+        <p className="login-card__eyebrow">STUDIO ACCESS</p>
+        <h1>Sign in</h1>
+        <p className="login-card__desc">
+          Enter your studio password to manage invoices.
+        </p>
+
+        <form onSubmit={onSubmit}>
+          <label className="login-field">
+            <span>Password</span>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              required
+              autoFocus
+            />
+          </label>
+
+          {error ? (
+            <p className="studio-alert studio-alert--error" role="alert">
+              {error}
+            </p>
+          ) : null}
+
+          <button
+            type="submit"
+            disabled={pending}
+            className="studio-btn studio-btn--primary"
+            style={{ width: "100%", marginTop: "0.25rem" }}
           >
-            STUDIO ACCESS
-          </p>
-          <h1 style={{ margin: "0.35rem 0 0", fontSize: "1.8rem" }}>Sign in</h1>
-          <p
-            style={{
-              margin: "0.5rem 0 0",
-              opacity: 0.75,
-              fontFamily: "system-ui, sans-serif",
-              fontSize: "0.95rem",
-            }}
-          >
-            Enter your studio password to manage invoices.
-          </p>
-        </div>
-        <label
-          style={{ display: "grid", gap: "0.4rem", fontFamily: "system-ui, sans-serif" }}
-        >
-          <span>Password</span>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-            required
-            style={{
-              minHeight: 44,
-              padding: "0 0.85rem",
-              border: "1px solid rgba(248,250,252,0.25)",
-              background: "#0b1220",
-              color: "#fff",
-              fontSize: "1rem",
-            }}
-          />
-        </label>
-        {error ? (
-          <p
-            role="alert"
-            style={{ margin: 0, color: "#fecaca", fontFamily: "system-ui, sans-serif" }}
-          >
-            {error}
-          </p>
-        ) : null}
-        <button
-          type="submit"
-          disabled={pending}
-          style={{
-            minHeight: 44,
-            border: 0,
-            background: "#f8fafc",
-            color: "#0f172a",
-            fontWeight: 700,
-            cursor: "pointer",
-            fontFamily: "system-ui, sans-serif",
-          }}
-        >
-          {pending ? "Signing in…" : "Continue"}
-        </button>
-      </form>
+            {pending ? "Signing in…" : "Continue to studio"}
+          </button>
+        </form>
+
+        <Link href="/" className="login-back">
+          ← Back to home
+        </Link>
+      </div>
     </main>
   );
 }

@@ -77,7 +77,7 @@ export function buildInvoiceAccessUrl(
   const token = createInvoiceAccessToken(orderId, email);
   if (!token) return null;
 
-  const base = process.env.NEXT_PUBLIC_SITE_URL ?? "https://vibemusic.in";
+  const base = process.env.NEXT_PUBLIC_SITE_URL?.trim() || "http://localhost:3000";
   const url = new URL(path, base);
   url.searchParams.set("token", token);
   return url.toString();

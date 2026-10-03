@@ -1,0 +1,26 @@
+# Dependencies
+node_modules
+.next
+npm-debug.log*
+
+# Environment (mount at runtime)
+.env
+.env.local
+.env.*.local
+
+# Data (mount as Docker volume)
+data
+
+# Git / IDE
+.git
+.gitignore
+.cursor
+.vscode
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Docs / dev
+README.md
+MANIFEST.txt

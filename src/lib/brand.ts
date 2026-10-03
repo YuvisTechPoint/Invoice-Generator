@@ -8,27 +8,27 @@ function storePhoneFromEnv(): string {
 
 const storePhone = storePhoneFromEnv();
 
-/** Studio identity used when drafting client invoices for web & software work. */
+/** Default app identity and seller placeholders for new invoices. */
 export const BRAND = {
-  name: "Northline Digital",
-  shortName: "Northline",
-  tagline: "Websites & software, shipped with clarity",
+  name: "Invoice Generator",
+  shortName: "Invoice",
+  tagline: "Create and share invoices in minutes",
   description:
-    "Northline Digital builds websites, web apps, and software products for startups and businesses.",
-  supportRole: "Project lead",
+    "Create, preview, download, and share professional invoices — fast and simple.",
+  supportRole: "Accounts",
   phone: storePhone,
-  phoneDisplay: storePhone || "+916291129896",
+  phoneDisplay: storePhone || "+91 98765 43210",
   phoneTel: storePhone
     ? `+${storePhone.replace(/\D/g, "")}`
-    : "+916291129896",
-  email: "hello@northline.digital",
+    : "+919876543210",
+  email: "billing@example.com",
   siteUrl: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
-  domain: "northline.digital",
-  address: "Andheri East, Mumbai, Maharashtra, India",
-  logoPath: "/brand/vibemusic-logo.svg",
-  headerLogoPath: "/brand/header-logo.webp",
-  iconPath: "/icon-48.png",
-  cardName: "Northline Digital",
-  gearExchangeName: "Northline Digital",
-  studiosName: "Northline Digital",
+  domain: "example.com",
+  address: "Your city, state, India",
+  logoPath: "/brand/logo.svg",
+  headerLogoPath: "/brand/logo.svg",
+  iconPath: "/icon.svg",
+  cardName: "Invoice Generator",
+  gearExchangeName: "Invoice Generator",
+  studiosName: "Invoice Generator",
 } as const;

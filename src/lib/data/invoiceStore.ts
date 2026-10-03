@@ -1,12 +1,14 @@
 import "server-only";
+import { draftToOrder } from "@/lib/demo/invoiceDraft";
 import type { InvoiceDraft } from "@/lib/demo/invoiceDraft";
 import {
-  atomicWriteJson,
-  getInvoicesDir,
-  readJsonFile,
-} from "@/lib/data/paths";
-import path from "node:path";
-import fs from "node:fs";
+  INVOICE_STORAGE_PREFIX,
+  deleteStorageKey,
+  invoiceStorageKey,
+  listStorageKeys,
+  readStorageJson,
+  writeStorageJson,
+} from "@/lib/data/jsonStorage";
 
 export type InvoiceStatus = "draft" | "issued" | "paid" | "void";
 
@@ -33,35 +35,21 @@ export type InvoiceListItem = {
   updatedAt: string;
 };
 
-function fileFor(id: string): string {
-  const safe = id.replace(/[^\w.-]+/g, "_");
-  return path.join(getInvoicesDir(), `${safe}.json`);
-}
-
-export function listStoredInvoices(): InvoiceListItem[] {
-  const dir = getInvoicesDir();
-  const files = fs.readdirSync(dir).filter((f) => f.endsWith(".json"));
+export async function listStoredInvoices(): Promise<InvoiceListItem[]> {
+  const keys = await listStorageKeys(INVOICE_STORAGE_PREFIX);
   const items: InvoiceListItem[] = [];
 
-  for (const file of files) {
-    const full = path.join(dir, file);
-    const record = readJsonFile<StoredInvoice | null>(full, null);
+  for (const key of keys) {
+    const record = await readStorageJson<StoredInvoice | null>(key, null);
     if (!record?.draft) continue;
-    const total = record.draft.items.reduce(
-      (sum, item) =>
-        sum +
-        Math.max(0, Number(item.unitPrice) || 0) *
-          Math.max(0, Number(item.quantity) || 0),
-      0
-    );
-    const discount = Math.max(0, Number(record.draft.couponDiscount) || 0);
+    const order = draftToOrder(record.draft);
     items.push({
       id: record.id,
       invoiceNumber: record.invoiceNumber,
       status: record.status,
       clientName: record.clientName,
       clientEmail: record.clientEmail,
-      total: Math.max(0, total - discount),
+      total: order.total,
       invoiceDate: record.draft.invoiceDate,
       updatedAt: record.updatedAt,
     });
@@ -70,16 +58,16 @@ export function listStoredInvoices(): InvoiceListItem[] {
   return items.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
-export function getStoredInvoice(id: string): StoredInvoice | null {
-  return readJsonFile<StoredInvoice | null>(fileFor(id), null);
+export async function getStoredInvoice(id: string): Promise<StoredInvoice | null> {
+  return readStorageJson<StoredInvoice | null>(invoiceStorageKey(id), null);
 }
 
-export function saveStoredInvoice(
+export async function saveStoredInvoice(
   draft: InvoiceDraft,
   options?: { status?: InvoiceStatus; issuedAt?: string }
-): StoredInvoice {
+): Promise<StoredInvoice> {
   const now = new Date().toISOString();
-  const existing = getStoredInvoice(draft.orderId);
+  const existing = await getStoredInvoice(draft.orderId);
   const record: StoredInvoice = {
     id: draft.orderId,
     invoiceNumber: draft.invoiceNumber,
@@ -91,19 +79,18 @@ export function saveStoredInvoice(
     updatedAt: now,
     issuedAt: options?.issuedAt ?? existing?.issuedAt,
   };
-  atomicWriteJson(fileFor(record.id), record);
+  await writeStorageJson(invoiceStorageKey(record.id), record);
   return record;
 }
 
-export function deleteStoredInvoice(id: string): boolean {
-  const file = fileFor(id);
-  if (!fs.existsSync(file)) return false;
-  fs.unlinkSync(file);
-  return true;
+export async function deleteStoredInvoice(id: string): Promise<boolean> {
+  const existing = await getStoredInvoice(id);
+  if (!existing) return false;
+  return deleteStorageKey(invoiceStorageKey(id));
 }
 
-export function markInvoiceIssued(id: string): StoredInvoice | null {
-  const existing = getStoredInvoice(id);
+export async function markInvoiceIssued(id: string): Promise<StoredInvoice | null> {
+  const existing = await getStoredInvoice(id);
   if (!existing) return null;
   return saveStoredInvoice(existing.draft, {
     status: existing.status === "paid" ? "paid" : "issued",

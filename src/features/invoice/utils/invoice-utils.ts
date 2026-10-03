@@ -3,11 +3,14 @@ import { isPlacedOrder, orderNeedsPlacementRefresh } from "@/lib/orderPlacement"
 import type { Order, PaymentStatus } from "@/types/order";
 import { formatInvoiceDate, formatInvoiceDateTime } from "@/features/invoice/utils/format";
 
-/** Invoice is available once the order is fully placed. */
+/** Invoice is available when issued in the generator, or fully placed for legacy orders. */
 export function isInvoiceAvailable(order: {
   invoice?: Order["invoice"] | null;
   paymentStatus: PaymentStatus;
 }): boolean {
+  if (order.invoice?.invoiceNumber?.trim()) {
+    return true;
+  }
   return isPlacedOrder(order);
 }
 

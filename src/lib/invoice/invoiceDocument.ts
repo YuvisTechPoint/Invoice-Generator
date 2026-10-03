@@ -1399,7 +1399,7 @@ function invoiceGoBack(){
   var returnTo=${JSON.stringify(returnTo ?? "")};
   if(returnTo){window.location.href=returnTo;return;}
   if(window.history.length>1){window.history.back();return;}
-  window.location.href="/editor";
+  window.location.href="/invoices";
 }
 function invoiceDownload(){
   var pdfUrl=${JSON.stringify(downloadUrl || "/api/invoices/draft/pdf")};

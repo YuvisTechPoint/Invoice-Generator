@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { guardStudioApi } from "@/lib/api/guards";
 import {
   deleteStoredInvoice,
   getStoredInvoice,
@@ -12,14 +13,17 @@ import { upsertOrder } from "@/lib/server/orderService";
 import { loadInvoiceDraft } from "@/lib/demo/draftStore";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ orderId: string }> }
 ) {
+  const blocked = await guardStudioApi(request, { rateLimit: "studioApi" });
+  if (blocked) return blocked;
+
   const { orderId } = await context.params;
   if (orderId === "draft") {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  const stored = getStoredInvoice(orderId);
+  const stored = await getStoredInvoice(orderId);
   if (!stored) {
     return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
   }
@@ -30,6 +34,9 @@ export async function PUT(
   request: Request,
   context: { params: Promise<{ orderId: string }> }
 ) {
+  const blocked = await guardStudioApi(request, { rateLimit: "studioApi" });
+  if (blocked) return blocked;
+
   try {
     const { orderId } = await context.params;
     if (orderId === "draft") {
@@ -43,14 +50,24 @@ export async function PUT(
     };
 
     if (body.activate && !body.draft) {
-      const draft = loadInvoiceDraft(orderId);
+      const draft = await loadInvoiceDraft(orderId);
       if (!draft) {
         return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
       }
+      await setActiveInvoiceId(orderId);
       return NextResponse.json({
-        invoice: getStoredInvoice(orderId),
+        invoice: await getStoredInvoice(orderId),
         draft,
       });
+    }
+
+    if (body.status && !body.draft) {
+      const existing = await getStoredInvoice(orderId);
+      if (!existing) {
+        return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+      }
+      const saved = await saveStoredInvoice(existing.draft, { status: body.status });
+      return NextResponse.json({ invoice: saved });
     }
 
     const parsed = parseInvoiceDraft(body.draft);
@@ -62,11 +79,13 @@ export async function PUT(
       ...parsed.draft,
       orderId,
     });
-    const saved = saveStoredInvoice(draft, {
-      status: body.status,
-    });
-    setActiveInvoiceId(saved.id);
-    upsertOrder(draftToOrder(saved.draft), saved.draft);
+    const existing = await getStoredInvoice(orderId);
+    const saved = await saveStoredInvoice(
+      draft,
+      body.status ? { status: body.status } : existing ? {} : { status: "draft" }
+    );
+    await setActiveInvoiceId(saved.id);
+    await upsertOrder(draftToOrder(saved.draft), saved.draft);
 
     return NextResponse.json({ invoice: saved });
   } catch (err: unknown) {
@@ -76,17 +95,21 @@ export async function PUT(
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ orderId: string }> }
 ) {
+  const blocked = await guardStudioApi(request, { rateLimit: "studioApi" });
+  if (blocked) return blocked;
+
   const { orderId } = await context.params;
-  if (!getStoredInvoice(orderId)) {
+  if (!(await getStoredInvoice(orderId))) {
     return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
   }
-  deleteStoredInvoice(orderId);
-  const settings = getStudioSettings();
+  await deleteStoredInvoice(orderId);
+  const settings = await getStudioSettings();
   if (settings.activeInvoiceId === orderId) {
-    setActiveInvoiceId(listStoredInvoices()[0]?.id ?? null);
+    const invoices = await listStoredInvoices();
+    await setActiveInvoiceId(invoices[0]?.id ?? null);
   }
   return NextResponse.json({ ok: true });
 }

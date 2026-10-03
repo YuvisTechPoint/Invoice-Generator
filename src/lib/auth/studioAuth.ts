@@ -1,10 +1,10 @@
 import "server-only";
 import { cookies } from "next/headers";
+import { isStudioAuthRequired } from "@/lib/config/env";
 import {
   STUDIO_SESSION_COOKIE,
   STUDIO_SESSION_MAX_AGE_SECONDS,
   createSessionToken,
-  isAuthConfigured,
   verifySessionToken,
 } from "@/lib/auth/sessionCrypto";
 
@@ -39,9 +39,7 @@ export async function clearStudioSessionCookie(): Promise<void> {
 }
 
 export async function isStudioAuthenticated(): Promise<boolean> {
-  if (!isAuthConfigured() && process.env.NODE_ENV !== "production") {
-    return true;
-  }
+  if (!isStudioAuthRequired()) return true;
   const jar = await cookies();
   return verifySessionToken(jar.get(STUDIO_SESSION_COOKIE)?.value);
 }

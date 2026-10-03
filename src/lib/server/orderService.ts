@@ -5,40 +5,47 @@ import {
   getStoredInvoice,
   listStoredInvoices,
   saveStoredInvoice,
+  type InvoiceStatus,
 } from "@/lib/data/invoiceStore";
 import type { Order } from "@/types/order";
 import type { InvoiceDraft } from "@/lib/demo/invoiceDraft";
 
+function preserveStatusOnSave(
+  order: Order,
+  existing: Awaited<ReturnType<typeof getStoredInvoice>>
+): InvoiceStatus | undefined {
+  if (!existing) return "draft";
+  if (existing.status === "void") return "void";
+  if (existing.status === "paid") return "paid";
+  if (existing.status === "issued") return "issued";
+  if (order.paymentStatus === "paid") return "paid";
+  return existing.status;
+}
+
 export async function getOrderById(orderId: string): Promise<Order | null> {
-  const stored = getStoredInvoice(orderId);
+  const stored = await getStoredInvoice(orderId);
   if (!stored?.draft) return null;
   return draftToOrder(stored.draft);
 }
 
-export function upsertOrder(order: Order, draft?: InvoiceDraft): void {
+export async function upsertOrder(order: Order, draft?: InvoiceDraft): Promise<void> {
+  const existing = await getStoredInvoice(order.id);
+
   if (draft) {
-    saveStoredInvoice(
+    await saveStoredInvoice(
       {
         ...draft,
         orderId: order.id,
         invoiceNumber: order.invoice?.invoiceNumber || draft.invoiceNumber,
         email: order.email,
       },
-      {
-        status:
-          order.paymentStatus === "paid"
-            ? "paid"
-            : order.paymentStatus === "cod_pending"
-              ? "issued"
-              : "draft",
-      }
+      { status: preserveStatusOnSave(order, existing) }
     );
     return;
   }
 
-  const existing = getStoredInvoice(order.id);
   if (existing?.draft) {
-    saveStoredInvoice(
+    await saveStoredInvoice(
       {
         ...existing.draft,
         orderId: order.id,
@@ -47,21 +54,19 @@ export function upsertOrder(order: Order, draft?: InvoiceDraft): void {
         paymentStatus: order.paymentStatus,
         paymentMethod: order.paymentMethod,
       },
-      {
-        status:
-          order.paymentStatus === "paid"
-            ? "paid"
-            : existing.status === "void"
-              ? "void"
-              : "issued",
-      }
+      { status: preserveStatusOnSave(order, existing) }
     );
   }
 }
 
-export function listOrders(): Order[] {
-  return listStoredInvoices()
-    .map((item) => getStoredInvoice(item.id))
-    .filter((r): r is NonNullable<typeof r> => Boolean(r?.draft))
-    .map((r) => draftToOrder(r.draft));
+export async function listOrders(): Promise<Order[]> {
+  const items = await listStoredInvoices();
+  const orders: Order[] = [];
+  for (const item of items) {
+    const stored = await getStoredInvoice(item.id);
+    if (stored?.draft) {
+      orders.push(draftToOrder(stored.draft));
+    }
+  }
+  return orders;
 }

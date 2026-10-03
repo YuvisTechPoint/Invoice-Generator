@@ -1,6 +1,6 @@
 import "server-only";
 
-type PdfEngine = "playwright" | "puppeteer";
+type PdfEngine = "playwright" | "puppeteer" | "chromium";
 
 export type GenerateInvoicePdfResult =
   | { ok: true; buffer: Buffer; engine: PdfEngine }
@@ -32,7 +32,49 @@ body { padding: 0 !important; margin: 0 !important; }
   return `${pdfCss}${html}`;
 }
 
+async function renderWithVercelChromium(html: string): Promise<Buffer | null> {
+  if (!process.env.VERCEL) return null;
+
+  try {
+    const chromium = await import("@sparticuz/chromium");
+    const puppeteer = await import("puppeteer-core");
+
+    const browser = await puppeteer.default.launch({
+      args: chromium.default.args,
+      defaultViewport: { width: 1280, height: 720 },
+      executablePath: await chromium.default.executablePath(),
+      headless: true,
+    });
+
+    try {
+      const page = await browser.newPage();
+      await page.setContent(prepareHtmlForPdf(html), {
+        waitUntil: "load",
+        timeout: 60_000,
+      });
+      await page.emulateMediaType("print");
+      const pdf = await page.pdf({
+        format: "A4",
+        printBackground: true,
+        preferCSSPageSize: true,
+        margin: { top: "8mm", right: "9mm", bottom: "8mm", left: "9mm" },
+      });
+      return Buffer.from(pdf);
+    } finally {
+      await browser.close();
+    }
+  } catch (error) {
+    console.warn(
+      "[invoice-pdf] Vercel Chromium unavailable:",
+      error instanceof Error ? error.message : error
+    );
+    return null;
+  }
+}
+
 async function renderWithPuppeteer(html: string): Promise<Buffer | null> {
+  if (process.env.VERCEL) return null;
+
   try {
     const puppeteerMod = (await import("puppeteer")) as unknown as {
       default?: {
@@ -66,9 +108,11 @@ async function renderWithPuppeteer(html: string): Promise<Buffer | null> {
       throw new Error("Puppeteer launch() not found");
     }
 
+    const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH?.trim();
     const browser = await launch({
       args: [...PDF_LAUNCH_ARGS],
       headless: true,
+      ...(executablePath ? { executablePath } : {}),
     });
 
     try {
@@ -150,10 +194,15 @@ async function renderWithPlaywright(html: string): Promise<Buffer | null> {
   }
 }
 
-/** Prefer Puppeteer (installed in this app), then Playwright. */
+/** Prefer Vercel Chromium, then local Puppeteer, then Playwright. */
 export async function generateInvoicePdfResult(
   html: string
 ): Promise<GenerateInvoicePdfResult> {
+  const vercelPdf = await renderWithVercelChromium(html);
+  if (vercelPdf && vercelPdf.length > 0) {
+    return { ok: true, buffer: vercelPdf, engine: "chromium" };
+  }
+
   const puppeteerPdf = await renderWithPuppeteer(html);
   if (puppeteerPdf && puppeteerPdf.length > 0) {
     return { ok: true, buffer: puppeteerPdf, engine: "puppeteer" };

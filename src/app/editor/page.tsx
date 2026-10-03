@@ -1,12 +1,16 @@
 import type { Metadata } from "next";
-import { getInvoiceDraft, loadInvoiceDraft } from "@/lib/demo/draftStore";
-import { normalizeInvoiceDraft } from "@/lib/demo/invoiceDraft";
+import { redirect } from "next/navigation";
+import { loadInvoiceDraft } from "@/lib/demo/draftStore";
+import { getStoredInvoice } from "@/lib/data/invoiceStore";
+import {
+  resolveEditorHrefId,
+} from "@/lib/server/invoiceWorkflow";
+import { routes } from "@/lib/routes";
 import InvoiceEditor from "./InvoiceEditor";
 
 export const metadata: Metadata = {
-  title: "Client invoice drafter",
-  description:
-    "Draft invoices for website and software development clients",
+  title: "Editor",
+  description: "Create and edit invoices with live preview",
 };
 
 export const dynamic = "force-dynamic";
@@ -18,7 +22,25 @@ type EditorPageProps = {
 export default async function EditorPage({ searchParams }: EditorPageProps) {
   const params = await searchParams;
   const id = params.id?.trim();
-  const loaded = id ? loadInvoiceDraft(id) : null;
-  const initialDraft = normalizeInvoiceDraft(loaded ?? getInvoiceDraft());
-  return <InvoiceEditor initialDraft={initialDraft} />;
+
+  if (!id) {
+    const target = await resolveEditorHrefId();
+    redirect(target ? routes.editor(target) : routes.newInvoice);
+  }
+
+  const [stored, loaded] = await Promise.all([
+    getStoredInvoice(id),
+    loadInvoiceDraft(id),
+  ]);
+  if (!loaded || !stored) {
+    redirect(`${routes.invoices}?error=not-found&id=${encodeURIComponent(id)}`);
+  }
+
+  return (
+    <InvoiceEditor
+      initialDraft={loaded}
+      initialStatus={stored.status}
+      issuedAt={stored.issuedAt}
+    />
+  );
 }

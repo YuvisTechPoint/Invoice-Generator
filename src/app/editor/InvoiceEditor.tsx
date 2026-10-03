@@ -10,6 +10,9 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { absoluteUrl, routes } from "@/lib/routes";
 import {
   INDIAN_STATES,
   createEmptyLine,
@@ -33,7 +36,8 @@ import {
 import InvoiceContentFields from "./InvoiceContentFields";
 import PaymentSettlementPanel from "./PaymentSettlementPanel";
 import { SectionFrame } from "./SectionFrame";
-import "./editor.css";
+
+type InvoiceRecordStatus = "draft" | "issued" | "paid" | "void";
 
 type PreviewResponse = {
   draft: InvoiceDraft;
@@ -87,13 +91,24 @@ function Field({
   );
 }
 
-export default function InvoiceEditor({ initialDraft }: { initialDraft: InvoiceDraft }) {
+export default function InvoiceEditor({
+  initialDraft,
+  initialStatus = "draft",
+  issuedAt,
+}: {
+  initialDraft: InvoiceDraft;
+  initialStatus?: InvoiceRecordStatus;
+  issuedAt?: string;
+}) {
+  const router = useRouter();
   const formId = useId();
   const [draft, setDraft] = useState<InvoiceDraft>(() => normalizeInvoiceDraft(initialDraft));
+  const [recordStatus, setRecordStatus] = useState<InvoiceRecordStatus>(initialStatus);
+  const [issuedLink, setIssuedLink] = useState<string | null>(null);
   const [html, setHtml] = useState("");
   const [totals, setTotals] = useState<PreviewResponse["totals"] | null>(null);
   const [urls, setUrls] = useState<PreviewResponse["urls"] | null>(null);
-  const [status, setStatus] = useState<string>("Loading invoice preview…");
+  const [status, setStatus] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
@@ -109,6 +124,18 @@ export default function InvoiceEditor({ initialDraft }: { initialDraft: InvoiceD
   useEffect(() => {
     setHasMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (initialStatus !== "issued" && initialStatus !== "paid") return;
+    void fetch(`/api/invoices/${encodeURIComponent(initialDraft.orderId)}/share`)
+      .then((res) => res.json())
+      .then((data: { urls?: { html?: string } }) => {
+        if (data.urls?.html) setIssuedLink(data.urls.html);
+      })
+      .catch(() => {
+        /* ignore */
+      });
+  }, [initialDraft.orderId, initialStatus]);
 
   const applyPreview = useCallback(async (next: InvoiceDraft, persist: boolean) => {
     previewAbortRef.current?.abort();
@@ -132,11 +159,6 @@ export default function InvoiceEditor({ initialDraft }: { initialDraft: InvoiceD
       setHtml(data.html);
       setTotals(data.totals);
       setUrls(data.urls);
-      setStatus(
-        persist
-          ? `Saved. Invoice available at ${data.urls.html}`
-          : "Live preview updated"
-      );
       return data;
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
@@ -232,74 +254,6 @@ export default function InvoiceEditor({ initialDraft }: { initialDraft: InvoiceD
     });
   }
 
-  async function startBlankClientInvoice() {
-    setError(null);
-    setStatus("Creating new invoice…");
-    try {
-      const res = await fetch("/api/invoices", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: "{}",
-      });
-      const data = (await res.json()) as {
-        invoice?: { id: string; draft: InvoiceDraft };
-        error?: string;
-      };
-      if (!res.ok || !data.invoice?.draft) {
-        throw new Error(data.error || "Unable to create invoice");
-      }
-
-      const created = normalizeInvoiceDraft(data.invoice.draft);
-      const next: InvoiceDraft = {
-        ...created,
-        items: [
-          {
-            ...createEmptyLine(),
-            name: "Custom development service",
-            variantLabel: "Describe scope here",
-            unitPrice: 0,
-          },
-        ],
-        couponCode: "",
-        couponDiscount: 0,
-        shippingAddress: {
-          ...created.shippingAddress,
-          name: "",
-          line1: "",
-          line2: "",
-          city: "",
-          postalCode: "",
-          phone: "",
-        },
-        email: "",
-        customerPhone: "",
-        paymentMethod: "upi",
-        paymentStatus: "paid",
-        content: {
-          ...created.content,
-          amountPaidValue: 0,
-          amountDueValue: 0,
-          settlementStatus: "paid",
-        },
-      };
-
-      window.history.replaceState(
-        null,
-        "",
-        `/editor?id=${encodeURIComponent(next.orderId)}`
-      );
-      setDraft(next);
-      startTransition(() => {
-        void applyPreview(next, true);
-      });
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Unable to create invoice";
-      setError(message);
-      setStatus(message);
-    }
-  }
-
   function removeLine(id: string) {
     setDraft((prev) => {
       if (prev.items.length <= 1) return prev;
@@ -360,16 +314,20 @@ export default function InvoiceEditor({ initialDraft }: { initialDraft: InvoiceD
   }
 
   async function copyClientLink() {
-    const link = urls?.html;
-    if (!link) return;
-    const absolute =
-      link.startsWith("http") ? link : `${window.location.origin}${link}`;
-    try {
-      await navigator.clipboard.writeText(absolute);
-      setStatus("Client invoice link copied to clipboard");
-    } catch {
-      setStatus(`Client link: ${absolute}`);
+    if (recordStatus === "draft") {
+      await issueAndShare();
+      return;
     }
+    if (issuedLink) {
+      try {
+        await navigator.clipboard.writeText(absoluteUrl(issuedLink));
+        setStatus("Client invoice link copied to clipboard");
+      } catch {
+        setStatus(`Client link: ${absoluteUrl(issuedLink)}`);
+      }
+      return;
+    }
+    setError("Issue the invoice first to get a signed client link.");
   }
 
   async function issueAndShare() {
@@ -391,29 +349,23 @@ export default function InvoiceEditor({ initialDraft }: { initialDraft: InvoiceD
 
       const link = data.urls?.html;
       if (link) {
-        const absolute = link.startsWith("http")
-          ? link
-          : `${window.location.origin}${link}`;
+        setIssuedLink(link);
         try {
-          await navigator.clipboard.writeText(absolute);
+          await navigator.clipboard.writeText(absoluteUrl(link));
           setStatus("Issued — client link copied");
         } catch {
-          setStatus(`Issued — ${absolute}`);
+          setStatus(`Issued — ${absoluteUrl(link)}`);
         }
       } else {
         setStatus("Invoice issued");
       }
+      setRecordStatus("issued");
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Unable to issue invoice";
       setError(message);
       setStatus(message);
     }
-  }
-
-  async function logout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    window.location.href = "/login";
   }
 
   async function downloadInvoice() {
@@ -485,6 +437,88 @@ export default function InvoiceEditor({ initialDraft }: { initialDraft: InvoiceD
     }
   }
 
+  async function saveSellerDefaults() {
+    setError(null);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sellerDefaults: draft.seller }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error || "Unable to save defaults");
+      setStatus("Seller details saved as default for new invoices");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save defaults");
+    }
+  }
+
+  async function deleteInvoice() {
+    if (!window.confirm("Delete this invoice permanently?")) return;
+    try {
+      const res = await fetch(
+        `/api/invoices/${encodeURIComponent(draft.orderId)}`,
+        { method: "DELETE" }
+      );
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        throw new Error(data.error || "Delete failed");
+      }
+      router.push(routes.invoices);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed");
+    }
+  }
+
+  async function voidCurrentInvoice() {
+    if (!window.confirm("Mark this invoice as void?")) return;
+    try {
+      const res = await fetch(
+        `/api/invoices/${encodeURIComponent(draft.orderId)}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "void" }),
+        }
+      );
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        throw new Error(data.error || "Unable to void invoice");
+      }
+      setRecordStatus("void");
+      setStatus("Invoice marked as void");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to void invoice");
+    }
+  }
+
+  async function duplicateCurrentInvoice() {
+    try {
+      const res = await fetch(
+        `/api/invoices/${encodeURIComponent(draft.orderId)}/duplicate`,
+        { method: "POST" }
+      );
+      const data = (await res.json()) as { invoice?: { id: string }; error?: string };
+      if (!res.ok || !data.invoice?.id) {
+        throw new Error(data.error || "Duplicate failed");
+      }
+      router.push(routes.editor(data.invoice.id));
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Duplicate failed");
+    }
+  }
+
+  const statusLabel =
+    recordStatus === "issued"
+      ? issuedAt
+        ? `Issued ${issuedAt.slice(0, 10)}`
+        : "Issued"
+      : recordStatus.charAt(0).toUpperCase() + recordStatus.slice(1);
+
+  const isVoid = recordStatus === "void";
+
   const fid = (name: string) => `${formId}-${name}`;
 
   if (!hasMounted) {
@@ -492,7 +526,7 @@ export default function InvoiceEditor({ initialDraft }: { initialDraft: InvoiceD
       <div className="editor-shell" aria-busy="true">
         <header className="editor-header">
           <div>
-            <h1>Client invoice drafter</h1>
+            <h1>Invoice editor</h1>
             <p>Loading editor…</p>
           </div>
         </header>
@@ -501,96 +535,134 @@ export default function InvoiceEditor({ initialDraft }: { initialDraft: InvoiceD
   }
 
   return (
-    <div className="editor-shell">
-      <a className="editor-skip" href="#invoice-preview">
-        Skip to invoice preview
-      </a>
+    <>
+      <div className="editor-shell">
+        <a className="editor-skip" href="#invoice-preview">
+          Skip to invoice preview
+        </a>
 
-      <header className="editor-header">
-        <div>
-          <h1>Client invoice drafter</h1>
-          <p>
-            Draft invoices for website and software development clients. Load a
-            project preset, tweak services, save, then share the invoice link or print PDF.
-          </p>
-        </div>
-        <div className="editor-header__actions">
-          <a className="editor-btn" href="/invoices">
-            Invoice library
-          </a>
-          <button
-            type="button"
-            className="editor-btn"
-            onClick={() => void startBlankClientInvoice()}
-          >
-            New blank invoice
-          </button>
-          <button type="button" className="editor-btn" onClick={resetDraft}>
-            Load sample project
-          </button>
-          {urls ? (
-            <>
+        <header className="editor-header">
+          <div className="editor-header__intro">
+            <div className="editor-header__title-row">
+              <h1>{draft.invoiceNumber || "Invoice editor"}</h1>
+              <span className={`editor-badge editor-badge--${recordStatus}`}>
+                {statusLabel}
+              </span>
+            </div>
+            <p className="editor-header__desc">
+              Step 2 — edit fields and preview live. Save, then issue a client link or download PDF.
+            </p>
+          </div>
+
+          <div className="editor-toolbar editor-toolbar--actions">
+            <button
+              type="submit"
+              form={fid("form")}
+              className="editor-btn editor-btn--primary"
+              disabled={isPending || isVoid}
+            >
+              {isPending ? "Saving…" : "Save invoice"}
+            </button>
+            <button
+              type="button"
+              className="editor-btn editor-btn--accent"
+              onClick={() => void issueAndShare()}
+              disabled={isVoid}
+            >
+              Issue &amp; copy link
+            </button>
+            <button
+              type="button"
+              className="editor-btn"
+              onClick={() => void downloadInvoice()}
+              disabled={!html || isDownloadingPdf}
+            >
+              {isDownloadingPdf ? "Downloading…" : "Download PDF"}
+            </button>
+            {urls ? (
               <a className="editor-btn" href={urls.html} target="_blank" rel="noreferrer">
-                Open invoice
+                Open preview
               </a>
+            ) : null}
+            <Link className="editor-btn editor-btn--ghost" href={routes.home}>
+              Home
+            </Link>
+            <Link className="editor-btn editor-btn--ghost" href={routes.invoices}>
+              Library
+            </Link>
+            <Link className="editor-btn editor-btn--ghost" href={routes.settings}>
+              Settings
+            </Link>
+            <Link className="editor-btn editor-btn--ghost" href={routes.newInvoice}>
+              New invoice
+            </Link>
+            <button type="button" className="editor-btn editor-btn--ghost" onClick={resetDraft} disabled={isVoid}>
+              Load sample
+            </button>
+            <button
+              type="button"
+              className="editor-btn editor-btn--ghost"
+              onClick={() => void duplicateCurrentInvoice()}
+            >
+              Duplicate
+            </button>
+            {urls ? (
+              <>
+                <button
+                  type="button"
+                  className="editor-btn editor-btn--ghost"
+                  onClick={() => void copyClientLink()}
+                >
+                  Copy link
+                </button>
+                <a className="editor-btn editor-btn--ghost" href={urls.print} target="_blank" rel="noreferrer">
+                  Print
+                </a>
+              </>
+            ) : null}
+            {recordStatus !== "void" ? (
               <button
                 type="button"
-                className="editor-btn"
-                onClick={() => void copyClientLink()}
+                className="editor-btn editor-btn--ghost"
+                onClick={() => void voidCurrentInvoice()}
               >
-                Copy client link
+                Void
               </button>
-              <button
-                type="button"
-                className="editor-btn"
-                onClick={() => void issueAndShare()}
-              >
-                Issue & copy link
-              </button>
-              <a className="editor-btn" href={urls.print} target="_blank" rel="noreferrer">
-                Print / PDF
-              </a>
-              <button
-                type="button"
-                className="editor-btn"
-                onClick={() => void downloadInvoice()}
-                disabled={!html || isDownloadingPdf}
-              >
-                {isDownloadingPdf ? "Downloading PDF…" : "Download PDF"}
-              </button>
-            </>
-          ) : null}
-          <button
-            type="submit"
-            form={fid("form")}
-            className="editor-btn editor-btn--primary"
-            disabled={isPending}
-          >
-            {isPending ? "Updating…" : "Save invoice"}
-          </button>
-          <button type="button" className="editor-btn" onClick={() => void logout()}>
-            Log out
-          </button>
+            ) : null}
+            <button
+              type="button"
+              className="editor-btn editor-btn--ghost editor-btn--danger"
+              onClick={() => void deleteInvoice()}
+            >
+              Delete
+            </button>
+          </div>
+        </header>
+
+        {isVoid ? (
+          <div className="editor-status" data-tone="error">
+            This invoice is void and read-only. Duplicate it to create an editable copy.
+          </div>
+        ) : null}
+
+        <div
+          className="editor-status"
+          role="status"
+          aria-live="polite"
+          data-tone={error ? "error" : "info"}
+          hidden={!error && !status}
+        >
+          {error ?? status}
         </div>
-      </header>
 
-      <div
-        className="editor-status"
-        role="status"
-        aria-live="polite"
-        data-tone={error ? "error" : "info"}
-      >
-        {error ?? status}
-      </div>
-
-      <div className="editor-layout">
+        <div className="editor-layout">
         <section className="editor-form-pane" aria-labelledby={fid("form-title")}>
           <h2 id={fid("form-title")} className="visually-hidden" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>
             Editable invoice fields
           </h2>
 
           <form id={fid("form")} onSubmit={onSubmit} noValidate>
-            <fieldset className="editor-section">
+            <fieldset className="editor-section" disabled={isVoid}>
               <legend>Quick start — project presets</legend>
               <p className="editor-hint" id={fid("presets-help")}>
                 Load common website / software packages, then edit rates and client details.
@@ -610,17 +682,21 @@ export default function InvoiceEditor({ initialDraft }: { initialDraft: InvoiceD
               </div>
             </fieldset>
 
-            <fieldset className="editor-section">
+            <fieldset className="editor-section" disabled={isVoid}>
               <legend>Invoice & project</legend>
               <div className="editor-grid">
-                <Field id={fid("orderId")} label="Project reference">
+                <Field
+                  id={fid("orderId")}
+                  label="Project reference"
+                  hint="Auto-assigned — used for storage and links"
+                >
                   <input
                     id={fid("orderId")}
                     className="editor-field"
                     value={draft.orderId}
-                    onChange={(e) => updateDraft({ orderId: e.target.value })}
+                    readOnly
+                    aria-readonly="true"
                     autoComplete="off"
-                    required
                   />
                 </Field>
                 <Field id={fid("invoiceNumber")} label="Invoice number">
@@ -750,10 +826,10 @@ export default function InvoiceEditor({ initialDraft }: { initialDraft: InvoiceD
               </div>
             </fieldset>
 
-            <fieldset className="editor-section">
-              <legend>Your studio (service provider)</legend>
+            <fieldset className="editor-section" disabled={isVoid}>
+              <legend>Your business (seller)</legend>
               <div className="editor-grid">
-                <Field id={fid("seller-store")} label="Studio / trade name">
+                <Field id={fid("seller-store")} label="Business / trade name">
                   <input
                     id={fid("seller-store")}
                     className="editor-field"
@@ -764,7 +840,7 @@ export default function InvoiceEditor({ initialDraft }: { initialDraft: InvoiceD
                 <Field
                   id={fid("seller-legal")}
                   label="Legal name (header)"
-                  hint="Shown in the signatory block — e.g. For M/S NORTHLINE DIGITAL"
+                  hint="Shown in the signatory block — e.g. For Your Company Name"
                 >
                   <input
                     id={fid("seller-legal")}
@@ -860,9 +936,21 @@ export default function InvoiceEditor({ initialDraft }: { initialDraft: InvoiceD
                   />
                 </Field>
               </div>
+              <div style={{ marginTop: "0.75rem" }}>
+                <button
+                  type="button"
+                  className="editor-btn"
+                  onClick={() => void saveSellerDefaults()}
+                >
+                  Save as default for new invoices
+                </button>
+                <Link className="editor-btn" href={routes.settings} style={{ marginLeft: "0.5rem" }}>
+                  All settings
+                </Link>
+              </div>
             </fieldset>
 
-            <fieldset className="editor-section">
+            <fieldset className="editor-section" disabled={isVoid}>
               <legend>Client (bill to)</legend>
               <div className="editor-grid">
                 <Field id={fid("customer-name")} label="Client / company name">
@@ -968,7 +1056,7 @@ export default function InvoiceEditor({ initialDraft }: { initialDraft: InvoiceD
               </div>
             </fieldset>
 
-            <fieldset className="editor-section">
+            <fieldset className="editor-section" disabled={isVoid}>
               <legend>Discount & extra charges</legend>
               <div className="editor-grid">
                 <Field id={fid("coupon")} label="Adjustment type">
@@ -1038,7 +1126,7 @@ export default function InvoiceEditor({ initialDraft }: { initialDraft: InvoiceD
               </div>
             </fieldset>
 
-            <fieldset className="editor-section">
+            <fieldset className="editor-section" disabled={isVoid}>
               <legend>Services</legend>
               <p className="editor-hint" id={fid("items-help")}>
                 Add a service template, then adjust qty / rate. Scope notes appear under each
@@ -1238,7 +1326,8 @@ export default function InvoiceEditor({ initialDraft }: { initialDraft: InvoiceD
             sandbox="allow-same-origin allow-modals allow-popups allow-scripts"
           />
         </section>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

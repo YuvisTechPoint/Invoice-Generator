@@ -1,91 +1,224 @@
-# Invoice Generation Studio
+# Invoice Generator
 
-Production-ready Next.js studio for drafting, storing, sharing, and downloading client invoices (website / software development). Brand defaults: **Northline Digital**.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)](https://www.typescriptlang.org/)
+
+**Open-source invoice studio** — create, preview, download PDFs, and share signed client links.  
+Self-host locally, on Docker, or deploy to **Vercel** in minutes.
+
+[Report a bug](https://github.com/YuvisTechPoint/Invoice-Generator/issues) · [Request a feature](https://github.com/YuvisTechPoint/Invoice-Generator/issues/new)
+
+---
 
 ## Features
 
-- Invoice library (`/invoices`) — create, open, delete, copy guest share links
-- Visual editor (`/editor`) — live HTML preview, line items, presets, payment settlement
-- Persistent JSON storage under `./data` (or `DATA_DIR`)
-- Password-protected studio session (required in production)
-- Tokenized guest HTML / PDF links (no login required for clients)
-- PDF download via Puppeteer (queued, serial)
-- Health check at `/api/health`
+| Feature | Description |
+|---------|-------------|
+| **Visual editor** | Live HTML preview while you edit line items, taxes, and totals |
+| **Invoice library** | Search, duplicate, void, and manage all saved invoices |
+| **PDF export** | A4 print-ready PDFs (Puppeteer locally, Chromium on Vercel) |
+| **Client share links** | Signed URLs so clients can view invoices without logging in |
+| **Settings** | Seller defaults, invoice numbering, and branding |
+| **Flexible auth** | Password-protected studio or open mode for private networks |
+| **Portable storage** | Local JSON files (`./data`) or **Vercel Blob** on serverless |
 
-## Quick start
+---
+
+## Quick start (local)
 
 ```bash
+git clone https://github.com/YuvisTechPoint/Invoice-Generator.git
+cd Invoice-Generator
 npm install
 cp .env.example .env.local
-# Edit .env.local — set STUDIO_PASSWORD, SESSION_SECRET, INVOICE_ACCESS_SECRET
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) → redirects to `/invoices`.
+Open [http://localhost:3000](http://localhost:3000).
 
-Default local password (if you used the sample `.env.local`): `studio-dev`.
+Local dev uses `STUDIO_AUTH_DISABLED=true` in `.env.example` — no login required.
 
-## Environment
+If the dev server shows stale or missing module errors, run:
 
-| Variable | Required | Purpose |
+```bash
+npm run dev:clean
+```
+
+---
+
+## Deploy to Vercel
+
+This is the recommended path for a public `*.vercel.app` deployment.
+
+### 1. Import the repository
+
+1. Push this repo to GitHub (or fork it).
+2. Go to [vercel.com/new](https://vercel.com/new) and import **Invoice-Generator**.
+3. Leave the default **Next.js** framework preset.
+
+### 2. Connect Blob storage (required)
+
+Invoices must persist outside the serverless filesystem.
+
+1. In your Vercel project: **Storage → Create → Blob**.
+2. Connect the store to this project — Vercel sets `BLOB_READ_WRITE_TOKEN` automatically.
+
+### 3. Environment variables
+
+Copy from [`.env.vercel.example`](.env.vercel.example) into **Project → Settings → Environment Variables**:
+
+| Variable | Required | Example |
 |----------|----------|---------|
-| `STUDIO_PASSWORD` | Production | Studio login password |
-| `SESSION_SECRET` | Production | HMAC for session cookies (≥24 chars) |
-| `INVOICE_ACCESS_SECRET` | Yes | Signed guest invoice tokens |
-| `GUEST_ORDER_ACCESS_SECRET` | Optional | Alias for invoice access secret |
-| `NEXT_PUBLIC_SITE_URL` | Recommended | Absolute URLs / origin |
-| `DATA_DIR` | Optional | Override `./data` |
-| `INVOICE_PDF_ENABLED` | Optional | Default `true` |
+| `NEXT_PUBLIC_SITE_URL` | Yes | `https://your-app.vercel.app` |
+| `INVOICE_ACCESS_SECRET` | Yes | Random string, 24+ chars |
+| `STUDIO_PASSWORD` | Yes* | Strong studio password |
+| `SESSION_SECRET` | Yes* | Random string, 24+ chars |
+| `BLOB_READ_WRITE_TOKEN` | Auto | Set when Blob is connected |
+| `INVOICE_PDF_ENABLED` | No | `true` (default) |
 
-See `.env.example` for a full template.
+\* Or set `STUDIO_AUTH_DISABLED=true` only on trusted private deployments.
+
+**Generate secrets (PowerShell):**
+
+```powershell
+[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
+```
+
+### 4. Deploy
+
+Click **Deploy**. Vercel runs `npm run build` automatically.
+
+### 5. Verify
+
+```bash
+curl https://your-app.vercel.app/api/health
+```
+
+Expected response:
+
+```json
+{
+  "ok": true,
+  "configured": true,
+  "storage": "blob"
+}
+```
+
+If `configured` is `false`, check the `issues` array in the response and fix env vars.
+
+> **PDF on Vercel Hobby:** PDF routes may need up to 60s (Pro plan). On Hobby, use **Print → Save as PDF** from the HTML view if download times out.
+
+---
+
+## Docker (self-hosted)
+
+```bash
+cp .env.production.example .env.production
+# Edit secrets and NEXT_PUBLIC_SITE_URL
+
+npm run docker:up
+```
+
+Data persists in the `invoice-data` volume at `/data`.
+
+---
+
+## Environment reference
+
+| Variable | Purpose |
+|----------|---------|
+| `NEXT_PUBLIC_SITE_URL` | Public HTTPS origin for share links |
+| `INVOICE_ACCESS_SECRET` | HMAC secret for client invoice tokens |
+| `STUDIO_AUTH_DISABLED` | `true` = no login (dev / private LAN only) |
+| `STUDIO_PASSWORD` | Studio login password |
+| `SESSION_SECRET` | Session cookie signing secret |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob (auto on Vercel) |
+| `DATA_DIR` | Local/Docker JSON storage path |
+| `STORAGE_DRIVER` | `filesystem` or `blob` (auto-detected by default) |
+| `INVOICE_PDF_ENABLED` | `false` to disable PDF routes |
+
+See [`.env.example`](.env.example), [`.env.production.example`](.env.production.example), and [`.env.vercel.example`](.env.vercel.example).
+
+---
 
 ## Workflow
 
-1. Log in at `/login`
-2. **New invoice** on `/invoices` (allocates sequential `INV-YYYY-####`)
-3. Edit in `/editor?id=…` — Save, Download PDF, **Issue & copy link**
-4. Send the copied link to the client (tokenized HTML; works without studio login)
+1. **Home** (`/`) — overview and quick actions  
+2. **Library** (`/invoices`) — browse, search, duplicate, void  
+3. **Editor** (`/editor?id=…`) — edit with live preview, save, PDF, share  
+4. **Settings** (`/settings`) — seller defaults and invoice prefix  
+5. **Share** — issue a signed client link from the editor  
 
-## Data layout
+---
+
+## Project structure
+
+```
+src/
+  app/              # Next.js App Router pages & API routes
+  components/       # Shared UI (nav, footer, breadcrumbs)
+  features/invoice/ # HTML/PDF generation, invoice types
+  lib/
+    data/           # JSON storage (filesystem + Vercel Blob)
+    server/         # Invoice workflow, orders, settings
+```
+
+Local data layout:
 
 ```
 data/
-  settings.json          # counters, active invoice, seller defaults
-  invoices/{id}.json     # full draft + metadata
+  settings.json
+  invoices/{id}.json
 ```
 
-`data/` is gitignored. Back up this folder in production.
+---
 
-## Production checklist
+## Scripts
 
-1. Set strong `STUDIO_PASSWORD`, `SESSION_SECRET`, and `INVOICE_ACCESS_SECRET`
-2. Confirm `/api/health` returns `"productionHardened": true`
-3. Ensure Chromium/Puppeteer dependencies are available on the host (or set `INVOICE_PDF_ENABLED=false` and use Print → Save as PDF)
-4. Persist and back up `DATA_DIR`
-5. Serve over HTTPS (`secure` session cookies in production)
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Development server |
+| `npm run dev:clean` | Clear `.next` cache and start dev |
+| `npm run build` | Production build |
+| `npm start` | Run production server |
+| `npm run typecheck` | TypeScript check |
+| `npm run docker:up` | Build & start Docker Compose |
 
-```bash
-npm run build
-npm start
-```
+---
 
-## Main routes
+## Contributing
 
-| Path | Description |
-|------|-------------|
-| `/login` | Studio password login |
-| `/invoices` | Invoice library |
-| `/editor` | Active / `?id=` invoice editor |
-| `/api/invoices` | List / create / delete |
-| `/api/invoices/draft` | Preview + save active draft |
-| `/api/invoices/[id]/html` | HTML invoice (session or `?token=`) |
-| `/api/invoices/[id]/pdf` | PDF download |
-| `/api/invoices/[id]/share` | Guest URLs + issue |
-| `/api/health` | Liveness + config flags |
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+1. Fork the repo  
+2. Create a branch (`git checkout -b feature/my-change`)  
+3. Commit your changes  
+4. Open a pull request  
+
+Please run `npm run typecheck` and `npm run build` before submitting.
+
+---
+
+## Security
+
+- Rate limits on API, PDF, and login endpoints  
+- Security headers (X-Frame-Options, nosniff, etc.)  
+- Signed tokens for guest invoice access  
+- Enable studio auth (`STUDIO_AUTH_DISABLED=false`) on any public deployment  
+- Never commit `.env.local`, `.env.production`, or real secrets  
+
+---
+
+## License
+
+[MIT](LICENSE) © [YuvisTechPoint](https://github.com/YuvisTechPoint)
+
+---
 
 ## Stack
 
-- Next.js 15 (App Router)
-- Zod draft validation
-- File-backed JSON store
-- Puppeteer PDF generation
+- [Next.js 15](https://nextjs.org/) (App Router)  
+- [TypeScript](https://www.typescriptlang.org/) + [Zod](https://zod.dev/)  
+- [Vercel Blob](https://vercel.com/docs/storage/vercel-blob) or local JSON files  
+- [@sparticuz/chromium](https://github.com/Sparticuz/chromium) + Puppeteer for PDFs  

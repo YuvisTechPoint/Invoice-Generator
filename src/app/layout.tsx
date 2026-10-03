@@ -1,16 +1,23 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Client invoice drafter — Northline Digital",
+  title: {
+    default: "Invoice Generator",
+    template: "%s · Invoice Generator",
+  },
   description:
-    "Draft invoices for website and software development clients",
+    "Create, preview, download, and share professional invoices.",
+  icons: {
+    icon: "/icon.svg",
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body style={{ margin: 0 }}>{children}</body>
+      <body className="studio-app">{children}</body>
     </html>
   );
 }

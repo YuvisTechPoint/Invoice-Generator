@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { guardStudioApi } from "@/lib/api/guards";
 import { generateInvoiceHtml } from "@/features/invoice/server/generateInvoiceHtml";
 import { enqueueInvoicePdf } from "@/lib/invoice/pdfQueue";
 import { buildInvoiceDownloadFilename } from "@/features/invoice/server/invoiceUrls";
@@ -12,14 +13,17 @@ import { getInvoiceDraft, saveInvoiceDraft } from "@/lib/demo/draftStore";
 import { parseInvoiceDraft } from "@/lib/validation/invoiceDraftSchema";
 import { upsertOrder } from "@/lib/server/orderService";
 
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
 async function buildPdfResponse(draftInput?: InvoiceDraft) {
   const draft = draftInput
-    ? saveInvoiceDraft(normalizeInvoiceDraft(draftInput))
-    : getInvoiceDraft();
+    ? await saveInvoiceDraft(normalizeInvoiceDraft(draftInput))
+    : await getInvoiceDraft();
   const order = draftToOrder(draft);
   const seller = draftToSellerMeta(draft);
 
-  upsertOrder(order, draft);
+  await upsertOrder(order, draft);
 
   const html = generateInvoiceHtml(order, seller, {
     showActions: false,
@@ -50,7 +54,10 @@ async function buildPdfResponse(draftInput?: InvoiceDraft) {
   });
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const blocked = await guardStudioApi(request, { rateLimit: "pdfGeneration" });
+  if (blocked) return blocked;
+
   try {
     return await buildPdfResponse();
   } catch (err: unknown) {
@@ -60,6 +67,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const blocked = await guardStudioApi(request, { rateLimit: "pdfGeneration" });
+  if (blocked) return blocked;
+
   try {
     const body = (await request.json().catch(() => ({}))) as {
       draft?: unknown;

@@ -4,49 +4,16 @@ import {
   STUDIO_SESSION_COOKIE,
   verifySessionToken,
 } from "@/lib/auth/sessionCrypto";
-
-const PUBLIC_PREFIXES = [
-  "/login",
-  "/api/auth/login",
-  "/api/health",
-  "/_next",
-  "/favicon",
-  "/brand",
-  "/icon",
-];
-
-function isPublic(pathname: string): boolean {
-  if (
-    PUBLIC_PREFIXES.some(
-      (p) => pathname === p || pathname.startsWith(`${p}/`) || pathname.startsWith(p)
-    )
-  ) {
-    return true;
-  }
-  if (
-    pathname.startsWith("/api/invoices/") &&
-    (pathname.endsWith("/html") || pathname.endsWith("/pdf"))
-  ) {
-    return true;
-  }
-  if (pathname.startsWith("/orders/") && pathname.endsWith("/invoice")) {
-    return true;
-  }
-  return false;
-}
+import { isPublicPath, isStudioAuthRequired } from "@/lib/config/env";
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (isPublic(pathname)) {
+  if (isPublicPath(pathname)) {
     return NextResponse.next();
   }
 
-  const passwordSet = Boolean(process.env.STUDIO_PASSWORD?.trim());
-  const requireAuth =
-    process.env.NODE_ENV === "production" || passwordSet;
-
-  if (!requireAuth) {
+  if (!isStudioAuthRequired()) {
     return NextResponse.next();
   }
 

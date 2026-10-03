@@ -115,16 +115,35 @@ export function verifyStudioPassword(password: string): boolean {
 
 export function isProductionHardened(): boolean {
   if (process.env.NODE_ENV !== "production") return true;
+
+  const invoiceSecret =
+    process.env.INVOICE_ACCESS_SECRET?.trim() ||
+    process.env.GUEST_ORDER_ACCESS_SECRET?.trim() ||
+    "";
+  if (
+    !invoiceSecret ||
+    invoiceSecret.includes("change-me") ||
+    invoiceSecret.includes("dev-invoice-access-secret") ||
+    invoiceSecret.length < 16
+  ) {
+    return false;
+  }
+
+  const authDisabled =
+    process.env.STUDIO_AUTH_DISABLED?.trim().toLowerCase() === "true" ||
+    process.env.STUDIO_AUTH_DISABLED?.trim() === "1";
+
+  if (authDisabled || !process.env.STUDIO_PASSWORD?.trim()) {
+    return Boolean(process.env.NEXT_PUBLIC_SITE_URL?.trim());
+  }
+
   const secret = process.env.SESSION_SECRET?.trim() || "";
   const password = process.env.STUDIO_PASSWORD?.trim() || "";
-  const invoiceSecret = process.env.INVOICE_ACCESS_SECRET?.trim() || "";
   const weak =
     !secret ||
     secret.includes("change-me") ||
     secret.length < 24 ||
     !password ||
-    password === "studio" ||
-    !invoiceSecret ||
-    invoiceSecret.includes("change-me");
+    password === "studio";
   return !weak;
 }

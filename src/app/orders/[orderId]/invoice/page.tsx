@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth/server-session";
 import { verifyInvoiceAccessToken } from "@/lib/security/invoiceAccessToken";
+import { routes } from "@/lib/routes";
 
 function appendQueryParam(url: string, key: string, value: string): string {
   const separator = url.includes("?") ? "&" : "?";
@@ -42,6 +43,8 @@ export default async function InvoicePage({
 
   if (returnTo) {
     htmlUrl = appendQueryParam(htmlUrl, "returnTo", returnTo);
+  } else if (sessionUser) {
+    htmlUrl = appendQueryParam(htmlUrl, "returnTo", routes.editor(orderId));
   }
 
   redirect(htmlUrl);

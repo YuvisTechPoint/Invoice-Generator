@@ -180,7 +180,7 @@ export const DEFAULT_INVOICE_CONTENT: InvoiceSectionContent = {
   upiId: "yuvrajprasad@uco",
   upiPayeeName: "Yuvraj Prasad",
   showSignatory: true,
-  signatoryForLabel: "For M/S NORTHLINE DIGITAL",
+  signatoryForLabel: "For Your Company Name",
   signatoryName: "Yuvraj Prasad",
   signatoryTitle: "Authorized Signatory",
   signatoryImageDataUrl: "",
